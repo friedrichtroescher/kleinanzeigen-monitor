@@ -2,6 +2,20 @@
 
 Crawlt Kleinanzeigen-Suchanfragen stündlich, bewertet neue Inserate per KI und schickt Treffer via Telegram.
 
+## Funktionsweise
+
+```
+Kleinanzeigen-URL → HTML parsen → KI bewertet → Telegram-Nachricht
+```
+
+Bei jedem Lauf iteriert das Skript über alle konfigurierten `[[searches]]`. Pro Suche werden die aktuellen Inserate von Kleinanzeigen gescrapt. Jedes Inserat, das noch nicht in `seen.json` steht, wird an ein Sprachmodell via [OpenRouter](https://openrouter.ai) geschickt. Das Modell bewertet anhand von `profile`, `max_price` und `criteria` ob das Inserat ein Treffer ist. Bei `match: true` geht eine Telegram-Nachricht raus.
+
+**Deduplizierung**: Alle gesehenen Inserat-IDs werden in `seen.json` gespeichert. Jedes Inserat wird also nur einmal bewertet, egal wie oft das Skript läuft.
+
+**Scheduling**: `setup.sh` trägt Cron-Jobs ein, die zu den in `config.toml` konfigurierten Uhrzeiten laufen.
+
+**Kosten**: Das Skript nutzt bewusst günstige Modelle (z.B. Gemini Flash Lite). Bei ~50 neuen Inseraten pro Tag liegen die Kosten im Cent-Bereich.
+
 ## Setup
 
 ### 1. Telegram-Bot erstellen
