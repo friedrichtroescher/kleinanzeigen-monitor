@@ -1,0 +1,29 @@
+[schedule]
+# Uhrzeiten (0-23) zu denen das Skript laufen soll
+times = [8, 12, 18]
+
+[model]
+# OpenRouter-Modell – guenstige Optionen:
+#   "google/gemini-2.0-flash-lite-001"   (sehr guenstig, schnell)
+#   "anthropic/claude-haiku-4-5"         (gut + guenstig)
+#   "meta-llama/llama-3.1-8b-instruct"  (kostenlos auf OpenRouter)
+id = "google/gemini-2.0-flash-lite-001"
+
+[network]
+# Anzahl Wiederholungsversuche bei Verbindungsfehlern (0 = kein Retry)
+retries = 2
+
+[assistant]
+# Allgemeiner Kontext fuer den KI-Bewerter – wer kauft, was ist wichtig
+profile = "Ich suche gebrauchte Gegenstaende in gutem Zustand zu fairen Preisen."
+
+# Zusaetzliche globale Hinweise (optional)
+extra_notes = ""
+
+# Suchanfragen – beliebig viele [[searches]]-Bloecke
+# Jede Suche hat: name, url, max_price, criteria
+[[searches]]
+name = "beispiel-kategorie"
+url = "https://www.kleinanzeigen.de/s-beispiel/k0"
+max_price = 500
+criteria = "Hier die Bewertungskriterien eintragen, z.B. Groesse, Zustand, Modell."
