@@ -118,7 +118,7 @@ def fetch_listings(url: str, retries: int = 2) -> list[dict]:
         price = price_el.get_text(strip=True) if price_el else "Preis unbekannt"
 
         loc_el = article.select_one(".aditem-main--top--left")
-        location = loc_el.get_text(strip=True) if loc_el else "Ort unbekannt"
+        location = " ".join(loc_el.get_text().split()) if loc_el else "Ort unbekannt"
 
         link_el = article.select_one("a[href]")
         href = link_el["href"] if link_el else ""
@@ -141,33 +141,38 @@ def evaluate_listing(api_key: str, model: str, system_prompt: str, listing: dict
         f"Ort: {listing['location']}\n"
         f"URL: {listing['url']}"
     )
-    try:
-        resp = requests.post(
-            OPENROUTER_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "max_tokens": 256,
-                "temperature": 0,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"].strip()
-        # Markdown-Codeblock entfernen falls vorhanden (```json ... ```)
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-        return json.loads(raw)
-    except (json.JSONDecodeError, requests.RequestException, KeyError) as e:
-        log.warning("Bewertungsfehler fuer %s: %s", listing["id"], e)
-        return {"match": False, "reason": "Bewertungsfehler", "category": "irrelevant"}
+    for attempt in range(3):
+        try:
+            resp = requests.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "max_tokens": 256,
+                    "temperature": 0,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_msg},
+                    ],
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            if content is None:
+                log.warning("Bewertung fuer %s: leere Antwort (Versuch %d/3)", listing["id"], attempt + 1)
+                continue
+            raw = content.strip()
+            # Markdown-Codeblock entfernen falls vorhanden (```json ... ```)
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+            return json.loads(raw)
+        except (json.JSONDecodeError, requests.RequestException, KeyError, AttributeError) as e:
+            log.warning("Bewertungsfehler fuer %s (Versuch %d/3): %s", listing["id"], attempt + 1, e)
+    return {"match": False, "reason": "Bewertungsfehler", "category": "irrelevant"}
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> bool:
