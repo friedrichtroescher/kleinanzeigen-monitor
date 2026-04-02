@@ -1,6 +1,6 @@
 # Kleinanzeigen Monitor
 
-Crawlt Kleinanzeigen-Suchanfragen stündlich, bewertet neue Inserate per KI und schickt Treffer via Telegram.
+Crawlt Kleinanzeigen-Suchanfragen, bewertet Inserate per KI über OpenRouter und schickt Treffer via Telegram.
 
 ## Funktionsweise
 
