@@ -52,7 +52,7 @@ SYSTEM_PROMPT_TEMPLATE = """Du bewertest Kleinanzeigen-Inserate.
 Kaeufer-Profil:
 {profile}
 
-Fuer jedes Inserat erhaeltst du: Suchname, Maximalpreis und Kriterien.
+Fuer jedes Inserat erhaeltst du: Suchname, Maximalpreis und Prompt.
 Bewerte das Inserat anhand dieser Kriterien und antworte NUR mit validem JSON (kein Markdown):
 {{"match": true/false, "reason": "kurze Begruendung auf Deutsch", "category": "suchname oder irrelevant"}}
 
@@ -133,7 +133,7 @@ def evaluate_listing(api_key: str, model: str, system_prompt: str, listing: dict
     user_msg = (
         f"Suche: {search['name']}\n"
         f"Maximalpreis: {search.get('max_price', 0)} EUR\n"
-        f"Kriterien: {search.get('criteria', '')}\n"
+        f"Prompt: {search.get('prompt', '')}\n"
         f"\n"
         f"Titel: {listing['title']}\n"
         f"Preis: {listing['price']}\n"
@@ -256,7 +256,7 @@ def run_test(telegram_token: str, telegram_chat: str) -> None:
         "Beispiel-Treffer:\n"
         "[RENNRAD] Trek Emonda SL5 54cm - 750 EUR\n"
         "Muenchen, Bayern\n"
-        "Shimano 105, guter Zustand, passt den Kriterien\n"
+        "Shimano 105, guter Zustand, passt dem Prompt\n"
         "https://www.kleinanzeigen.de/s-anzeige/beispiel"
     )
     log.info("Sende Test-Nachricht via Telegram...")

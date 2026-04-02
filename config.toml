@@ -21,9 +21,9 @@ profile = "Ich suche gebrauchte Gegenstaende in gutem Zustand zu fairen Preisen.
 extra_notes = ""
 
 # Suchanfragen – beliebig viele [[searches]]-Bloecke
-# Jede Suche hat: name, url, max_price, criteria
+# Jede Suche hat: name, url, max_price, prompt
 [[searches]]
 name = "beispiel-kategorie"
 url = "https://www.kleinanzeigen.de/s-beispiel/k0"
 max_price = 500
-criteria = "Hier die Bewertungskriterien eintragen, z.B. Groesse, Zustand, Modell."
+prompt = "Hier die Bewertungskriterien eintragen, z.B. Groesse, Zustand, Modell."
