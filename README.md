@@ -8,7 +8,7 @@ Crawlt Kleinanzeigen-Suchanfragen stündlich, bewertet neue Inserate per KI und 
 Kleinanzeigen-URL → HTML parsen → KI bewertet → Telegram-Nachricht
 ```
 
-Bei jedem Lauf iteriert das Skript über alle konfigurierten `[[searches]]`. Pro Suche werden die aktuellen Inserate von Kleinanzeigen gescrapt. Jedes Inserat, das noch nicht in `seen.json` steht, wird an ein Sprachmodell via [OpenRouter](https://openrouter.ai) geschickt. Das Modell bewertet anhand von `profile`, `max_price` und `criteria` ob das Inserat ein Treffer ist. Bei `match: true` geht eine Telegram-Nachricht raus.
+Bei jedem Lauf iteriert das Skript über alle konfigurierten `[[searches]]`. Pro Suche werden die aktuellen Inserate von Kleinanzeigen gescrapt. Jedes Inserat, das noch nicht in `seen.json` steht, wird an ein Sprachmodell via [OpenRouter](https://openrouter.ai) geschickt. Das Modell bewertet anhand von `profile`, `max_price` und `prompt` ob das Inserat ein Treffer ist. Bei `match: true` geht eine Telegram-Nachricht raus.
 
 **Deduplizierung**: Alle gesehenen Inserat-IDs werden in `seen.json` gespeichert. Jedes Inserat wird also nur einmal bewertet, egal wie oft das Skript läuft.
 
@@ -58,7 +58,7 @@ profile = "Ich suche gebrauchte Gegenstände in gutem Zustand zu fairen Preisen.
 name = "rennrad"
 url = "https://www.kleinanzeigen.de/s-rennrad/k0"
 max_price = 800
-criteria = "Rahmen 54-56cm, mind. Shimano 105, kein Rost"
+prompt = "Rahmen 54-56cm, mind. Shimano 105, kein Rost"
 ```
 
 Die `url` einfach aus dem Browser kopieren, nachdem man auf Kleinanzeigen gesucht hat.
