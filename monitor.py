@@ -232,7 +232,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
             category = evaluation.get("category", "irrelevant")
             match = evaluation.get("match", False)
 
-            log.info("  -> %s, match=%s: %s", category, match, evaluation.get("reason", "")[:80])
+            log.info("  -> %s, match=%s: %s", category, match, evaluation.get("reason", ""))
 
             if match:
                 msg = format_message(listing, evaluation)
