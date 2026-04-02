@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
@@ -17,6 +18,22 @@ BASE_DIR = Path(__file__).parent
 SEEN_FILE = BASE_DIR / "seen.json"
 ENV_FILE = BASE_DIR / ".env"
 CONFIG_FILE = BASE_DIR / "config.toml"
+LOG_FILE = BASE_DIR / "monitor.log"
+
+
+def setup_logging() -> None:
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+
+
+log = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -44,7 +61,7 @@ Bewerte das Inserat anhand dieser Kriterien und antworte NUR mit validem JSON (k
 
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
-        print("Fehler: config.toml nicht gefunden.", file=sys.stderr)
+        log.error("config.toml nicht gefunden.")
         sys.exit(1)
     with open(CONFIG_FILE, "rb") as f:
         return tomllib.load(f)
@@ -79,10 +96,10 @@ def fetch_listings(url: str, retries: int = 2) -> list[dict]:
         except requests.RequestException as e:
             if attempt < retries:
                 wait = 5 * (attempt + 1)
-                print(f"  [WARN] Fehler beim Abrufen von {url}: {e} – Retry {attempt + 1}/{retries} in {wait}s", file=sys.stderr)
+                log.warning("Fehler beim Abrufen von %s: %s – Retry %d/%d in %ds", url, e, attempt + 1, retries, wait)
                 time.sleep(wait)
             else:
-                print(f"  [WARN] Fehler beim Abrufen von {url}: {e} – Alle Versuche fehlgeschlagen", file=sys.stderr)
+                log.warning("Fehler beim Abrufen von %s: %s – Alle Versuche fehlgeschlagen", url, e)
                 return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -148,7 +165,7 @@ def evaluate_listing(api_key: str, model: str, system_prompt: str, listing: dict
             raw = raw.strip()
         return json.loads(raw)
     except (json.JSONDecodeError, requests.RequestException, KeyError) as e:
-        print(f"  [WARN] Bewertungsfehler fuer {listing['id']}: {e}", file=sys.stderr)
+        log.warning("Bewertungsfehler fuer %s: %s", listing["id"], e)
         return {"match": False, "reason": "Bewertungsfehler", "category": "irrelevant"}
 
 
@@ -163,7 +180,7 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         resp.raise_for_status()
         return True
     except requests.RequestException as e:
-        print(f"  [WARN] Telegram-Fehler: {e}", file=sys.stderr)
+        log.warning("Telegram-Fehler: %s", e)
         return False
 
 
@@ -189,19 +206,19 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
     searches = config.get("searches", [])
 
     if not searches:
-        print("Keine Suchen in config.toml konfiguriert.", file=sys.stderr)
+        log.error("Keine Suchen in config.toml konfiguriert.")
         sys.exit(1)
 
     for search in searches:
         url = search.get("url", "")
         name = search.get("name", "?")
         if not url:
-            print(f"  [WARN] Suche '{name}' hat keine URL – uebersprungen.", file=sys.stderr)
+            log.warning("Suche '%s' hat keine URL – uebersprungen.", name)
             continue
 
-        print(f"Crawle [{name}]: {url}")
+        log.info("Crawle [%s]: %s", name, url)
         listings = fetch_listings(url, retries=retries)
-        print(f"  {len(listings)} Inserate gefunden")
+        log.info("%d Inserate gefunden", len(listings))
 
         for listing in listings:
             ad_id = listing["id"]
@@ -210,17 +227,17 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
             if ad_id in seen:
                 continue
 
-            print(f"  Neu: [{ad_id}] {listing['title'][:60]}")
+            log.info("Neu: [%s] %s", ad_id, listing["title"][:60])
             evaluation = evaluate_listing(api_key, model, system_prompt, listing, search)
             category = evaluation.get("category", "irrelevant")
             match = evaluation.get("match", False)
 
-            print(f"    -> {category}, match={match}: {evaluation.get('reason', '')[:80]}")
+            log.info("  -> %s, match=%s: %s", category, match, evaluation.get("reason", "")[:80])
 
             if match:
                 msg = format_message(listing, evaluation)
                 if send_telegram(telegram_token, telegram_chat, msg):
-                    print(f"    -> Telegram-Nachricht gesendet")
+                    log.info("  -> Telegram-Nachricht gesendet")
                     matches += 1
 
             time.sleep(0.5)
@@ -229,7 +246,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
         save_seen(seen)  # nach jeder Such-URL zwischenspeichern
         time.sleep(2)
 
-    print(f"\nFertig. {matches} Treffer gesendet. {len(seen)} IDs bekannt.")
+    log.info("Fertig. %d Treffer gesendet. %d IDs bekannt.", matches, len(seen))
 
 
 def run_test(telegram_token: str, telegram_chat: str) -> None:
@@ -242,11 +259,11 @@ def run_test(telegram_token: str, telegram_chat: str) -> None:
         "Shimano 105, guter Zustand, passt den Kriterien\n"
         "https://www.kleinanzeigen.de/s-anzeige/beispiel"
     )
-    print("Sende Test-Nachricht via Telegram...")
+    log.info("Sende Test-Nachricht via Telegram...")
     if send_telegram(telegram_token, telegram_chat, msg):
-        print("Erfolg! Nachricht gesendet.")
+        log.info("Erfolg! Nachricht gesendet.")
     else:
-        print("Fehler beim Senden.", file=sys.stderr)
+        log.error("Fehler beim Senden.")
         sys.exit(1)
 
 
@@ -268,13 +285,14 @@ def install_cron(config: dict) -> None:
     new_crontab = "\n".join(existing + new_entries) + "\n"
     proc = subprocess.run(["crontab", "-"], input=new_crontab, text=True)
     if proc.returncode == 0:
-        print(f"Cron aktualisiert: {len(new_entries)} Eintraege ({', '.join(f'{h}:00' for h in sorted(set(times)))} Uhr)")
+        log.info("Cron aktualisiert: %d Eintraege (%s Uhr)", len(new_entries), ", ".join(f"{h}:00" for h in sorted(set(times))))
     else:
-        print("Fehler beim Setzen der Crontab.", file=sys.stderr)
+        log.error("Fehler beim Setzen der Crontab.")
         sys.exit(1)
 
 
 def main() -> None:
+    setup_logging()
     parser = argparse.ArgumentParser(description="Kleinanzeigen Monitor")
     parser.add_argument("--test", action="store_true", help="Sende Test-Nachricht via Telegram")
     parser.add_argument("--install-cron", action="store_true", help="Cron-Jobs aus config.toml installieren")
@@ -291,7 +309,7 @@ def main() -> None:
         return
 
     if not telegram_token or not telegram_chat:
-        print("Fehler: TELEGRAM_BOT_TOKEN und TELEGRAM_CHAT_ID muessen in .env gesetzt sein.", file=sys.stderr)
+        log.error("TELEGRAM_BOT_TOKEN und TELEGRAM_CHAT_ID muessen in .env gesetzt sein.")
         sys.exit(1)
 
     if args.test:
@@ -300,7 +318,7 @@ def main() -> None:
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        print("Fehler: OPENROUTER_API_KEY muss in .env gesetzt sein.", file=sys.stderr)
+        log.error("OPENROUTER_API_KEY muss in .env gesetzt sein.")
         sys.exit(1)
 
     run_monitor(config, api_key, telegram_token, telegram_chat)
