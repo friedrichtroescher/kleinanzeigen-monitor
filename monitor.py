@@ -88,6 +88,7 @@ def save_seen(seen: set) -> None:
 
 
 def fetch_listings(url: str, retries: int = 2) -> list[dict]:
+    global resp
     for attempt in range(1 + retries):
         try:
             resp = requests.get(url, headers=BROWSER_HEADERS, timeout=15)
