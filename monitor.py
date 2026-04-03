@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kleinanzeigen Monitor – universeller Crawler mit KI-Bewertung und Telegram-Benachrichtigung."""
+"""Kleinanzeigen Monitor – universal crawler with AI evaluation and Telegram notifications."""
 
 import argparse
 import json
@@ -47,21 +47,21 @@ BROWSER_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-SYSTEM_PROMPT_TEMPLATE = """Du bewertest Kleinanzeigen-Inserate.
+SYSTEM_PROMPT_TEMPLATE = """You evaluate classified listings.
 
-Kaeufer-Profil:
+Buyer profile:
 {profile}
 
-Fuer jedes Inserat erhaeltst du: Suchname, Maximalpreis und Prompt.
-Bewerte das Inserat anhand dieser Kriterien und antworte NUR mit validem JSON (kein Markdown):
-{{"match": true/false, "reason": "kurze Begruendung auf Deutsch", "category": "suchname oder irrelevant"}}
+For each listing you receive: search name, maximum price, and prompt.
+Evaluate the listing based on these criteria and respond ONLY with valid JSON (no Markdown):
+{{"match": true/false, "reason": "brief reason in English", "category": "searchname or irrelevant"}}
 
 {extra}"""
 
 
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
-        log.error("config.toml nicht gefunden.")
+        log.error("config.toml not found.")
         sys.exit(1)
     with open(CONFIG_FILE, "rb") as f:
         return tomllib.load(f)
@@ -69,9 +69,9 @@ def load_config() -> dict:
 
 def build_system_prompt(config: dict) -> str:
     assistant = config.get("assistant", {})
-    profile = assistant.get("profile", "Ich suche gebrauchte Gegenstaende in gutem Zustand.")
+    profile = assistant.get("profile", "I am looking for used items in good condition.")
     extra_notes = assistant.get("extra_notes", "").strip()
-    extra_block = f"Zusaetzliche Hinweise:\n{extra_notes}\n" if extra_notes else ""
+    extra_block = f"Additional notes:\n{extra_notes}\n" if extra_notes else ""
     return SYSTEM_PROMPT_TEMPLATE.format(profile=profile, extra=extra_block)
 
 
@@ -97,10 +97,10 @@ def fetch_listings(url: str, retries: int = 2) -> list[dict]:
         except requests.RequestException as e:
             if attempt < retries:
                 wait = 5 * (attempt + 1)
-                log.warning("Fehler beim Abrufen von %s: %s – Retry %d/%d in %ds", url, e, attempt + 1, retries, wait)
+                log.warning("Error fetching %s: %s – Retry %d/%d in %ds", url, e, attempt + 1, retries, wait)
                 time.sleep(wait)
             else:
-                log.warning("Fehler beim Abrufen von %s: %s – Alle Versuche fehlgeschlagen", url, e)
+                log.warning("Error fetching %s: %s – All attempts failed", url, e)
                 return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -112,13 +112,13 @@ def fetch_listings(url: str, retries: int = 2) -> list[dict]:
             continue
 
         title_el = article.select_one(".ellipsis") or article.select_one("h2")
-        title = title_el.get_text(strip=True) if title_el else "(kein Titel)"
+        title = title_el.get_text(strip=True) if title_el else "(no title)"
 
         price_el = article.select_one(".aditem-main--middle--price-shipping--price")
-        price = price_el.get_text(strip=True) if price_el else "Preis unbekannt"
+        price = price_el.get_text(strip=True) if price_el else "Price unknown"
 
         loc_el = article.select_one(".aditem-main--top--left")
-        location = " ".join(loc_el.get_text().split()) if loc_el else "Ort unbekannt"
+        location = " ".join(loc_el.get_text().split()) if loc_el else "Location unknown"
 
         link_el = article.select_one("a[href]")
         href = link_el["href"] if link_el else ""
@@ -132,13 +132,13 @@ def fetch_listings(url: str, retries: int = 2) -> list[dict]:
 
 def evaluate_listing(api_key: str, model: str, system_prompt: str, listing: dict, search: dict) -> dict:
     user_msg = (
-        f"Suche: {search['name']}\n"
-        f"Maximalpreis: {search.get('max_price', 0)} EUR\n"
+        f"Search: {search['name']}\n"
+        f"Max price: {search.get('max_price', 0)} EUR\n"
         f"Prompt: {search.get('prompt', '')}\n"
         f"\n"
-        f"Titel: {listing['title']}\n"
-        f"Preis: {listing['price']}\n"
-        f"Ort: {listing['location']}\n"
+        f"Title: {listing['title']}\n"
+        f"Price: {listing['price']}\n"
+        f"Location: {listing['location']}\n"
         f"URL: {listing['url']}"
     )
     for attempt in range(3):
@@ -160,10 +160,10 @@ def evaluate_listing(api_key: str, model: str, system_prompt: str, listing: dict
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
             if content is None:
-                log.warning("Bewertung fuer %s: leere Antwort (Versuch %d/3)", listing["id"], attempt + 1)
+                log.warning("Evaluation for %s: empty response (attempt %d/3)", listing["id"], attempt + 1)
                 continue
             raw = content.strip()
-            # Markdown-Codeblock entfernen falls vorhanden (```json ... ```)
+            # Strip Markdown code block if present (```json ... ```)
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -171,8 +171,8 @@ def evaluate_listing(api_key: str, model: str, system_prompt: str, listing: dict
                 raw = raw.strip()
             return json.loads(raw)
         except (json.JSONDecodeError, requests.RequestException, KeyError, AttributeError) as e:
-            log.warning("Bewertungsfehler fuer %s (Versuch %d/3): %s", listing["id"], attempt + 1, e)
-    return {"match": False, "reason": "Bewertungsfehler", "category": "irrelevant"}
+            log.warning("Evaluation error for %s (attempt %d/3): %s", listing["id"], attempt + 1, e)
+    return {"match": False, "reason": "Evaluation error", "category": "irrelevant"}
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> bool:
@@ -186,7 +186,7 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         resp.raise_for_status()
         return True
     except requests.RequestException as e:
-        log.warning("Telegram-Fehler: %s", e)
+        log.warning("Telegram error: %s", e)
         return False
 
 
@@ -212,19 +212,19 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
     searches = config.get("searches", [])
 
     if not searches:
-        log.error("Keine Suchen in config.toml konfiguriert.")
+        log.error("No searches configured in config.toml.")
         sys.exit(1)
 
     for search in searches:
         url = search.get("url", "")
         name = search.get("name", "?")
         if not url:
-            log.warning("Suche '%s' hat keine URL – uebersprungen.", name)
+            log.warning("Search '%s' has no URL – skipped.", name)
             continue
 
-        log.info("Crawle [%s]: %s", name, url)
+        log.info("Crawling [%s]: %s", name, url)
         listings = fetch_listings(url, retries=retries)
-        log.info("%d Inserate gefunden", len(listings))
+        log.info("%d listings found", len(listings))
 
         for listing in listings:
             ad_id = listing["id"]
@@ -243,38 +243,38 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
             if match:
                 msg = format_message(listing, evaluation)
                 if send_telegram(telegram_token, telegram_chat, msg):
-                    log.info("  -> Telegram-Nachricht gesendet")
+                    log.info("  -> Telegram message sent")
                     matches += 1
 
             time.sleep(0.5)
 
         seen.update(new_seen)
-        save_seen(seen)  # nach jeder Such-URL zwischenspeichern
+        save_seen(seen)  # save after each search URL
         time.sleep(2)
 
-    log.info("Fertig. %d Treffer gesendet. %d IDs bekannt.", matches, len(seen))
+    log.info("Done. %d matches sent. %d IDs known.", matches, len(seen))
 
 
 def run_test(telegram_token: str, telegram_chat: str) -> None:
     msg = (
-        "Kleinanzeigen Monitor Testlauf erfolgreich!\n"
+        "Kleinanzeigen Monitor test run successful!\n"
         "\n"
-        "Beispiel-Treffer:\n"
+        "Example match:\n"
         "[RENNRAD] Trek Emonda SL5 54cm - 750 EUR\n"
-        "Muenchen, Bayern\n"
-        "Shimano 105, guter Zustand, passt dem Prompt\n"
+        "Munich, Bavaria\n"
+        "Shimano 105, good condition, matches the prompt\n"
         "https://www.kleinanzeigen.de/s-anzeige/beispiel"
     )
-    log.info("Sende Test-Nachricht via Telegram...")
+    log.info("Sending test message via Telegram...")
     if send_telegram(telegram_token, telegram_chat, msg):
-        log.info("Erfolg! Nachricht gesendet.")
+        log.info("Success! Message sent.")
     else:
-        log.error("Fehler beim Senden.")
+        log.error("Error sending message.")
         sys.exit(1)
 
 
 def install_cron(config: dict) -> None:
-    """Liest Zeiten aus config.toml und aktualisiert crontab."""
+    """Reads schedule times from config.toml and updates crontab."""
     times = config.get("schedule", {}).get("times", [9, 15])
     uv = "/opt/homebrew/bin/uv"
     script_dir = str(BASE_DIR)
@@ -291,17 +291,17 @@ def install_cron(config: dict) -> None:
     new_crontab = "\n".join(existing + new_entries) + "\n"
     proc = subprocess.run(["crontab", "-"], input=new_crontab, text=True)
     if proc.returncode == 0:
-        log.info("Cron aktualisiert: %d Eintraege (%s Uhr)", len(new_entries), ", ".join(f"{h}:00" for h in sorted(set(times))))
+        log.info("Cron updated: %d entries (%s)", len(new_entries), ", ".join(f"{h}:00" for h in sorted(set(times))))
     else:
-        log.error("Fehler beim Setzen der Crontab.")
+        log.error("Failed to set crontab.")
         sys.exit(1)
 
 
 def main() -> None:
     setup_logging()
     parser = argparse.ArgumentParser(description="Kleinanzeigen Monitor")
-    parser.add_argument("--test", action="store_true", help="Sende Test-Nachricht via Telegram")
-    parser.add_argument("--install-cron", action="store_true", help="Cron-Jobs aus config.toml installieren")
+    parser.add_argument("--test", action="store_true", help="Send test message via Telegram")
+    parser.add_argument("--install-cron", action="store_true", help="Install cron jobs from config.toml")
     args = parser.parse_args()
 
     load_dotenv(ENV_FILE)
@@ -315,7 +315,7 @@ def main() -> None:
         return
 
     if not telegram_token or not telegram_chat:
-        log.error("TELEGRAM_BOT_TOKEN und TELEGRAM_CHAT_ID muessen in .env gesetzt sein.")
+        log.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in .env.")
         sys.exit(1)
 
     if args.test:
@@ -324,7 +324,7 @@ def main() -> None:
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        log.error("OPENROUTER_API_KEY muss in .env gesetzt sein.")
+        log.error("OPENROUTER_API_KEY must be set in .env.")
         sys.exit(1)
 
     run_monitor(config, api_key, telegram_token, telegram_chat)
