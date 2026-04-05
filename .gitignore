@@ -1,2 +1,6 @@
 ./seen.json
 ./config.toml
+.idea
+.vscode
+.env
+config.toml
