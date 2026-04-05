@@ -1,0 +1,25 @@
+[schedule]
+# Hours (0-23) at which the script should run
+times = [8, 12, 18]
+
+[model]
+# OpenRouter model – cheap options (no reasoning models – not supported):
+#   "google/gemini-2.0-flash-lite-001"   (very cheap, fast)
+#   "anthropic/claude-haiku-4-5"         (good + cheap)
+#   "meta-llama/llama-3.1-8b-instruct"  (free on OpenRouter)
+id = "google/gemini-2.0-flash-lite-001"
+
+[network]
+# Number of retries on connection errors (0 = no retry)
+retries = 2
+
+[assistant]
+# Shared context for all searches (optional)
+common_prompt = "I'm looking for used items in good condition at fair prices."
+
+# Searches – add as many [[searches]] blocks as needed
+# Each search has: url, max_price, addition_prompt (optional)
+[[searches]]
+url = "https://www.kleinanzeigen.de/s-beispiel/k0"
+max_price = 500
+addition_prompt = "Enter evaluation criteria here, e.g. size, condition, model."
