@@ -63,7 +63,7 @@ SYSTEM_PROMPT = (
 
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
-        log.error("config.toml not found.")
+        log.error("config.toml not found. Copy config.toml.example and fill it in.")
         sys.exit(1)
     with open(CONFIG_FILE, "rb") as f:
         return tomllib.load(f)
@@ -317,7 +317,7 @@ def main() -> None:
         return
 
     if not telegram_token or not telegram_chat:
-        log.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in .env.")
+        log.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in .env (see .env.example).")
         sys.exit(1)
 
     if args.test:
@@ -326,7 +326,7 @@ def main() -> None:
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        log.error("OPENROUTER_API_KEY must be set in .env.")
+        log.error("OPENROUTER_API_KEY must be set in .env (see .env.example).")
         sys.exit(1)
 
     run_monitor(config, api_key, telegram_token, telegram_chat)
