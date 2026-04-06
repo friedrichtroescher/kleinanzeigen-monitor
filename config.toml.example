@@ -17,6 +17,11 @@ retries = 2
 # Shared context for all searches (optional)
 common_prompt = "I'm looking for used items in good condition at fair prices."
 
+# If false, evaluation consists only of a first step, evaluating listings from their info on the search overview page.
+# If true, use a more precise second step, fetching and evaluating the detail page after an initial match in the first step.
+# if enabled, this causes more https requests and openrouter token usage.
+deep_eval = false
+
 # Searches – add as many [[searches]] blocks as needed
 # Each search has: url, max_price, addition_prompt (optional)
 [[searches]]
