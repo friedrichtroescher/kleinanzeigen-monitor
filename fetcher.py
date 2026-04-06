@@ -1,0 +1,97 @@
+"""Kleinanzeigen scraping."""
+
+import logging
+import time
+from typing import Optional
+
+import requests
+from bs4 import BeautifulSoup
+
+log = logging.getLogger(__name__)
+
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+
+
+def _get_with_retry(url: str, retries: int) -> Optional[requests.Response]:
+    for attempt in range(1 + retries):
+        try:
+            resp = requests.get(url, headers=BROWSER_HEADERS, timeout=15)
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as e:
+            if attempt < retries:
+                wait = 5 * (attempt + 1)
+                log.warning("Error fetching %s: %s – Retry %d/%d in %ds", url, e, attempt + 1, retries, wait)
+                time.sleep(wait)
+            else:
+                log.warning("Error fetching %s: %s – All attempts failed", url, e)
+    return None
+
+
+def fetch_listings(url: str, retries: int = 2) -> list[dict]:
+    resp = _get_with_retry(url, retries)
+    if resp is None:
+        return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    listings = []
+
+    for article in soup.select("article[data-adid]"):
+        ad_id = article.get("data-adid", "").strip()
+        if not ad_id:
+            continue
+
+        title_el = article.select_one(".ellipsis") or article.select_one("h2")
+        title = title_el.get_text(strip=True) if title_el else "(no title)"
+
+        price_el = article.select_one(".aditem-main--middle--price-shipping--price")
+        price = price_el.get_text(strip=True) if price_el else "Price unknown"
+
+        loc_el = article.select_one(".aditem-main--top--left")
+        location = " ".join(loc_el.get_text().split()) if loc_el else "Location unknown"
+
+        link_el = article.select_one("a[href]")
+        href = link_el["href"] if link_el else ""
+        if href.startswith("/"):
+            href = "https://www.kleinanzeigen.de" + href
+
+        listings.append({"id": ad_id, "title": title, "price": price, "location": location, "url": href})
+
+    return listings
+
+
+def fetch_listing_detail(url: str, retries: int = 2) -> dict:
+    resp = _get_with_retry(url, retries)
+    if resp is None:
+        return {}
+
+    try:
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        desc_el = soup.select_one("#viewad-description-text")
+        description = desc_el.get_text(separator="\n", strip=True) if desc_el else ""
+
+        attributes: dict[str, str] = {}
+        for li in soup.select(".addetailslist--detail"):
+            val_el = li.select_one(".addetailslist--detail--value")
+            val = val_el.get_text(strip=True) if val_el else ""
+            label = li.get_text(strip=True).replace(val, "").strip().rstrip(":")
+            if label and val:
+                attributes[label] = val
+
+        shipping_el = soup.select_one("span.boxedarticle--details--shipping")
+        shipping_text = shipping_el.get_text(strip=True) if shipping_el else ""
+        shipping = shipping_text if shipping_text else "Versand möglich"
+
+        return {"description": description, "attributes": attributes, "shipping": shipping}
+    except Exception as e:
+        log.warning("Error parsing detail page %s: %s", url, e)
+        return {}
