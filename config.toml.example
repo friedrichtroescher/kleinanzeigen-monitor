@@ -19,14 +19,27 @@ retries = 2
 # Shared context for all searches (optional)
 common_prompt = "I'm looking for used items in good condition at fair prices."
 
-# If false, evaluation consists only of a first step, evaluating listings from their info on the search overview page.
-# If true, use a more precise second step, fetching and evaluating the detail page after an initial match in the first step.
-# if enabled, this causes more https requests and openrouter token usage.
-deep_eval = false
+# Optional global defaults for all searches.
+# Each can be overridden per [[searches]] block, or omitted entirely (built-in defaults apply).
+# Built-in defaults: deep_eval = false, max_price = unset (model is told there is no price limit)
+#
+# deep_eval: if false, evaluates listings from the search overview page only.
+#            if true, fetches the detail page for a more precise second evaluation step.
+#            true causes more https requests and openrouter token usage.
+# deep_eval = false
+# max_price = 0
 
 # Searches – add as many [[searches]] blocks as needed
-# Each search has: url, max_price, addition_prompt (optional)
+# Required: url - just hop on Kleinanzeigen and create the search you need.
+# Add the location filter on the website, if you want one.
+# Optional: max_price, deep_eval (override global above), addition_prompt
 [[searches]]
 url = "https://www.kleinanzeigen.de/s-beispiel/k0"
 max_price = 500
+deep_eval = true
 addition_prompt = "Enter evaluation criteria here, e.g. size, condition, model."
+
+[[searches]]
+url = "https://www.kleinanzeigen.de/s-anderes-beispiel/k0"
+# max_price and deep_eval not set → inherits from [assistant] if set, else built-in defaults
+addition_prompt = "Another search with different criteria."

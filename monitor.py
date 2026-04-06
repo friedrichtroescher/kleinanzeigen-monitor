@@ -9,6 +9,7 @@ import sys
 import time
 import tomllib
 from pathlib import Path
+from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -195,18 +196,26 @@ def _format_detail_context(detail: dict) -> str:
     return "\n".join(lines)
 
 
+def resolve(search: dict, config: dict, key: str, default):
+    """Resolve a config key: search-level overrides [assistant] global, which overrides default."""
+    if key in search:
+        return search[key]
+    return config.get("assistant", {}).get(key, default)
+
+
 def evaluate_listing(
     api_key: str,
     model: str,
     system_prompt: str,
     listing: dict,
     search: dict,
+    max_price: Optional[int] = None,
     extra_context: str = "",
     required_fields: frozenset = frozenset({"match", "item", "reason"}),
 ) -> dict:
     addition_prompt = search.get("addition_prompt", "").strip()
     user_msg = (
-        f"Max price: {search.get('max_price', 0)} EUR\n"
+        (f"Max price: {max_price} EUR\n" if max_price is not None else "No maximum price.\n")
         + (f"Additional instructions: {addition_prompt}\n" if addition_prompt else "")
         + f"\nTitle: {listing['title']}\n"
         f"Price: {listing['price']}\n"
@@ -281,7 +290,6 @@ def format_message(listing: dict, evaluation: dict) -> str:
 def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: str) -> None:
     model = config.get("model", {}).get("id", "google/gemini-2.0-flash-lite-001")
     system_prompt = build_system_prompt(config)
-    deep_eval = config.get("assistant", {}).get("deep_eval", False)
     seen = load_seen()
     new_seen = set()
     matches = 0
@@ -299,7 +307,9 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
             log.warning("Search has no URL – skipped.")
             continue
 
-        log.info("Crawling: %s", url)
+        deep_eval = resolve(search, config, "deep_eval", False)
+        max_price = resolve(search, config, "max_price", None)
+        log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
         listings = fetch_listings(url, retries=retries)
         log.info("%d listings found", len(listings))
 
@@ -317,6 +327,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
                     api_key, model,
                     SYSTEM_PROMPT_PREFILTER,
                     listing, search,
+                    max_price=max_price,
                     required_fields=frozenset({"match"}),
                 )
                 match = step1.get("match", False)
@@ -326,7 +337,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
                     detail = fetch_listing_detail(listing["url"], retries=retries)
                     if detail:
                         extra = _format_detail_context(detail)
-                        evaluation = evaluate_listing(api_key, model, system_prompt, listing, search, extra_context=extra)
+                        evaluation = evaluate_listing(api_key, model, system_prompt, listing, search, max_price=max_price, extra_context=extra)
                     else:
                         log.warning("  -> step2 fetch failed, using step1 result (no detail)")
                         evaluation = {"match": True, "item": listing["title"], "reason": "Detail page unavailable"}
@@ -335,7 +346,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
                 else:
                     evaluation = step1
             else:
-                evaluation = evaluate_listing(api_key, model, system_prompt, listing, search)
+                evaluation = evaluate_listing(api_key, model, system_prompt, listing, search, max_price=max_price)
                 match = evaluation.get("match", False)
                 log.info("  -> match=%s: %s", match, evaluation.get("reason", ""))
 
