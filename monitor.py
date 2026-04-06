@@ -18,7 +18,7 @@ from persistence import load_seen, save_seen
 log = logging.getLogger(__name__)
 
 
-def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: str) -> None:
+def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: str, dry_run: bool = False, dont_skip_seen: bool = False) -> None:
     model = config.get("model", {}).get("id", "google/gemini-2.0-flash-lite-001")
     system_prompt = build_system_prompt(config)
     seen = load_seen()
@@ -48,7 +48,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
             ad_id = listing["id"]
             new_seen.add(ad_id)
 
-            if ad_id in seen:
+            if ad_id in seen and not dont_skip_seen:
                 continue
 
             log.info("Neu: [%s] %s", ad_id, listing["title"][:60])
@@ -84,7 +84,10 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
 
             if match:
                 msg = format_message(listing, evaluation)
-                if send_telegram(telegram_token, telegram_chat, msg):
+                if dry_run:
+                    log.info("  -> [dry-run] would send: %s", msg)
+                    matches += 1
+                elif send_telegram(telegram_token, telegram_chat, msg):
                     log.info("  -> Telegram message sent")
                     matches += 1
 
@@ -99,8 +102,25 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
 
 def main() -> None:
     setup_logging()
-    parser = argparse.ArgumentParser(description="Kleinanzeigen Monitor")
-    parser.add_argument("--test", action="store_true", help="Send test message via Telegram")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Monitors Kleinanzeigen searches and sends Telegram notifications for new\n"
+            "listings that match your criteria, evaluated by an AI model via OpenRouter.\n\n"
+            "Configured via config.toml and .env (see config.example.toml / .env.example)."
+        ),
+        epilog=(
+            "examples:\n"
+            "  monitor.py                           normal run\n"
+            "  monitor.py --dry-run                 test without sending notifications\n"
+            "  monitor.py --dry-run --dont-skip-seen\n"
+            "                                       debug evaluation against known listings\n"
+            "  monitor.py --test-telegram           verify Telegram is configured correctly"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--test-telegram", action="store_true", help="Send a test Telegram message to verify bot credentials, then exit.")
+    parser.add_argument("--dry-run", action="store_true", help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
+    parser.add_argument("--dont-skip-seen", action="store_true", help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
     args = parser.parse_args()
 
     load_dotenv(ENV_FILE)
@@ -117,7 +137,7 @@ def main() -> None:
         log.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in .env (see .env.example).")
         sys.exit(1)
 
-    if args.test:
+    if args.test_telegram:
         send_test_message(telegram_token, telegram_chat)
         return
 
@@ -126,7 +146,7 @@ def main() -> None:
         log.error("OPENROUTER_API_KEY must be set in .env (see .env.example).")
         sys.exit(1)
 
-    run_monitor(config, api_key, telegram_token, telegram_chat)
+    run_monitor(config, api_key, telegram_token, telegram_chat, dry_run=args.dry_run, dont_skip_seen=args.dont_skip_seen)
 
 
 if __name__ == "__main__":
