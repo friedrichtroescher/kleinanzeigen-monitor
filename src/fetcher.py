@@ -89,7 +89,7 @@ def fetch_listing_detail(url: str, retries: int = 2) -> dict:
 
         shipping_el = soup.select_one("span.boxedarticle--details--shipping")
         shipping_text = shipping_el.get_text(strip=True) if shipping_el else ""
-        shipping = shipping_text if shipping_text else "Versand möglich"
+        shipping = shipping_text if shipping_text else "Shipping available"
 
         return {"description": description, "attributes": attributes, "shipping": shipping}
     except Exception as e:

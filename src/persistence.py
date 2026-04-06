@@ -2,7 +2,7 @@
 
 import json
 
-from config import SEEN_FILE
+from .config import SEEN_FILE
 
 
 def load_seen() -> set:

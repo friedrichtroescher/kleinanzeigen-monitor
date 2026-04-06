@@ -5,7 +5,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).parent.parent
 SEEN_FILE = BASE_DIR / "seen.json"
 ENV_FILE = BASE_DIR / ".env"
 CONFIG_FILE = BASE_DIR / "config.toml"

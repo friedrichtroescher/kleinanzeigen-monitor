@@ -5,8 +5,8 @@ import logging
 import subprocess
 import sys
 
-from config import BASE_DIR, load_config, setup_logging
-from persistence import load_seen  # ensures seen.json is created if missing
+from src.config import BASE_DIR, load_config, setup_logging
+from src.persistence import load_seen  # ensures seen.json is created if missing
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ def install_cron(config: dict) -> None:
     existing = [l for l in result.stdout.splitlines() if "kleinanzeigen-monitor" not in l]
 
     new_entries = [
-        f"0 {hour} * * *  cd {script_dir} && {uv} run monitor.py >> {script_dir}/monitor.log 2>&1"
+        f"0 {hour} * * *  cd {script_dir} && {uv} run main.py >> {script_dir}/monitor.log 2>&1"
         for hour in sorted(set(times))
     ]
 
@@ -58,7 +58,7 @@ Next steps:
 
   2. Configure searches in config.toml
 
-  3. Test: cd {BASE_DIR} && uv run monitor.py --test
+  3. Test: cd {BASE_DIR} && uv run main.py --test
   4. Check cron: crontab -l
 """)
 

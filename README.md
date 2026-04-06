@@ -1,40 +1,40 @@
 # Kleinanzeigen Monitor
 
-Crawlt Kleinanzeigen-Suchanfragen, bewertet Inserate per KI über OpenRouter und schickt Treffer via Telegram.
+Crawls Kleinanzeigen searches, evaluates listings via AI through OpenRouter, and sends matches via Telegram.
 
-## Funktionsweise
+## How it works
 
 ```
-Kleinanzeigen-URL → HTML parsen → KI bewertet → Telegram-Nachricht
+Kleinanzeigen URL → parse HTML → AI evaluates → Telegram message
 ```
 
-Bei jedem Lauf iteriert das Skript über alle konfigurierten `[[searches]]`. Pro Suche werden die aktuellen Inserate von Kleinanzeigen gescrapt. Jedes Inserat, das noch nicht in `seen.json` steht, wird an ein Sprachmodell via [OpenRouter](https://openrouter.ai) geschickt. Das Modell bewertet anhand von `profile`, `max_price` und `prompt` ob das Inserat ein Treffer ist. Bei `match: true` geht eine Telegram-Nachricht raus.
+On each run the script iterates over all configured `[[searches]]`. For each search, current listings are scraped from Kleinanzeigen. Every listing not yet in `seen.json` is sent to a language model via [OpenRouter](https://openrouter.ai). The model evaluates based on `profile`, `max_price`, and `prompt` whether the listing is a match. On `match: true` a Telegram message is sent.
 
-**Deduplizierung**: Alle gesehenen Inserat-IDs werden in `seen.json` gespeichert. Jedes Inserat wird also nur einmal bewertet, egal wie oft das Skript läuft.
+**Deduplication**: All seen listing IDs are stored in `seen.json`. Each listing is therefore only evaluated once, regardless of how often the script runs.
 
-**Scheduling**: `setup.sh` trägt Cron-Jobs ein, die zu den in `config.toml` konfigurierten Uhrzeiten laufen.
+**Scheduling**: `setup.sh` registers cron jobs that run at the times configured in `config.toml`.
 
-**Kosten**: Das Skript nutzt bewusst günstige Modelle (z.B. Gemini Flash Lite). Bei ~50 neuen Inseraten pro Tag liegen die Kosten im Cent-Bereich.
+**Cost**: The script deliberately uses cheap models (e.g. Gemini Flash Lite). With ~50 new listings per day, costs are in the cent range.
 
 ## Setup
 
-### 1. Telegram-Bot erstellen
+### 1. Create a Telegram bot
 
-1. [@BotFather](https://t.me/BotFather) auf Telegram öffnen
-2. `/newbot` senden
-3. Name und Username vergeben (Username muss auf `bot` enden, z.B. `mein_monitor_bot`)
-4. Den angezeigten **Bot-Token** kopieren (`123456789:AAF...`)
+1. Open [@BotFather](https://t.me/BotFather) on Telegram
+2. Send `/newbot`
+3. Choose a name and username (username must end in `bot`, e.g. `my_monitor_bot`)
+4. Copy the displayed **bot token** (`123456789:AAF...`)
 
-Chat-ID ermitteln:
-1. Eine Nachricht an den neuen Bot schicken
-2. Im Browser öffnen: `https://api.telegram.org/bot<TOKEN>/getUpdates`
-3. `"chat":{"id":...}` aus der Antwort kopieren
+Get your chat ID:
+1. Send a message to the new bot
+2. Open in browser: `https://api.telegram.org/bot<TOKEN>/getUpdates`
+3. Copy `"chat":{"id":...}` from the response
 
-### 2. API-Keys holen
+### 2. Get API keys
 
-- **OpenRouter**: Account auf [openrouter.ai](https://openrouter.ai) → API Keys → Key erstellen
+- **OpenRouter**: Create an account at [openrouter.ai](https://openrouter.ai) → API Keys → create key
 
-### 3. `.env` befüllen
+### 3. Fill in `.env`
 
 ```
 cp .env.example .env
@@ -46,28 +46,28 @@ TELEGRAM_BOT_TOKEN=123456789:AAF...
 TELEGRAM_CHAT_ID=987654321
 ```
 
-### 4. Suchen konfigurieren
+### 4. Configure searches
 
-`config.toml` anpassen – pro Suche ein `[[searches]]`-Block:
+Edit `config.toml` — one `[[searches]]` block per search:
 
 ```toml
 [assistant]
-profile = "Ich suche gebrauchte Gegenstände in gutem Zustand zu fairen Preisen."
+profile = "I'm looking for used items in good condition at fair prices."
 
 [[searches]]
-name = "rennrad"
+name = "road-bike"
 url = "https://www.kleinanzeigen.de/s-rennrad/k0"
 max_price = 800
-prompt = "Rahmen 54-56cm, mind. Shimano 105, kein Rost"
+prompt = "Frame 54-56cm, at least Shimano 105, no rust"
 ```
 
-Die `url` einfach aus dem Browser kopieren, nachdem man auf Kleinanzeigen gesucht hat.
+Just copy the `url` from your browser after searching on Kleinanzeigen.
 
-### 5. Installieren und testen
+### 5. Install and test
 
 ```bash
 ./setup.sh
-uv run monitor.py --test   # Testnachricht via Telegram
-uv run monitor.py          # Einmaliger Lauf
-crontab -l                 # Cron-Jobs prüfen
+uv run main.py --test-telegram   # Send a test message via Telegram
+uv run main.py                   # Single run
+crontab -l                       # Check cron jobs
 ```

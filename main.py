@@ -9,11 +9,11 @@ import time
 
 from dotenv import load_dotenv
 
-from config import ENV_FILE, load_config, resolve, setup_logging
-from evaluator import SYSTEM_PROMPT_PREFILTER, build_system_prompt, evaluate_listing, format_detail_context
-from fetcher import fetch_listing_detail, fetch_listings
-from notifier import format_message, send_telegram, send_test_message
-from persistence import load_seen, save_seen
+from src.config import ENV_FILE, load_config, resolve, setup_logging
+from src.evaluator import SYSTEM_PROMPT_PREFILTER, build_system_prompt, evaluate_listing, format_detail_context
+from src.fetcher import fetch_listing_detail, fetch_listings
+from src.notifier import format_message, send_telegram, send_test_message
+from src.persistence import load_seen, save_seen
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
             if ad_id in seen and not dont_skip_seen:
                 continue
 
-            log.info("Neu: [%s] %s", ad_id, listing["title"][:60])
+            log.info("New: [%s] %s", ad_id, listing["title"][:60])
 
             if deep_eval:
                 step1 = evaluate_listing(
@@ -110,11 +110,11 @@ def main() -> None:
         ),
         epilog=(
             "examples:\n"
-            "  monitor.py                           normal run\n"
-            "  monitor.py --dry-run                 test without sending notifications\n"
-            "  monitor.py --dry-run --dont-skip-seen\n"
+            "  main.py                           normal run\n"
+            "  main.py --dry-run                 test without sending notifications\n"
+            "  main.py --dry-run --dont-skip-seen\n"
             "                                       debug evaluation against known listings\n"
-            "  monitor.py --test-telegram           verify Telegram is configured correctly"
+            "  main.py --test-telegram           verify Telegram is configured correctly"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
