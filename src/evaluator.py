@@ -1,10 +1,14 @@
 """AI-based listing evaluation via OpenRouter."""
-
 import json
 import logging
 from typing import Optional
 
 import requests
+
+from .fetcher import fetch_listing_detail
+from .models.listing import Listing
+from .models.evaluationResult import EvaluationResult
+from .models.listingDetail import ListingDetail
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +20,7 @@ SYSTEM_PROMPT = (
     "For each listing you receive: maximum price, and optionally additional instructions.\n"
     "If the listing price exceeds the maximum price, set match to false — no exceptions.\n"
     "Evaluate the listing and respond ONLY with valid JSON (no Markdown):\n"
-    '{"match": true/false, "item": "short clean item name", "reason": "brief reason"}\n\n'
+    '{"match": true/false, "item": "short clean item name", "reason": "..."}\n\n'
     '"item" is a concise, human-readable name for the article (e.g. "Wetzstein", "Gin Yeti EN-A Gr. L"). '
     'The "reason" must state WHY it is or isn\'t a match (condition, fit, caveats, noteworthy information). '
     "Do NOT repeat price, location, or item name in the reason — those are shown separately. "
@@ -40,44 +44,86 @@ def build_system_prompt(config: dict) -> str:
     return SYSTEM_PROMPT
 
 
-def format_detail_context(detail: dict) -> str:
+def format_detail_context(detail: ListingDetail) -> str:
     lines = []
-    shipping = detail.get("shipping", "")
-    if shipping:
-        lines.append(f"Shipping: {shipping}")
-    for key, val in detail.get("attributes", {}).items():
+    if detail.shipping:
+        lines.append(f"Shipping: {detail.shipping}")
+    for key, val in detail.attributes.items():
         lines.append(f"{key}: {val}")
-    description = detail.get("description", "").strip()
-    if description:
+    if detail.description:
         if lines:
             lines.append("")
         lines.append("Full description:")
-        lines.append(description)
+        lines.append(detail.description)
     return "\n".join(lines)
 
 
 def evaluate_listing(
-    api_key: str,
-    model: str,
-    system_prompt: str,
-    listing: dict,
-    search: dict,
-    max_price: Optional[int] = None,
-    extra_context: str = "",
-    required_fields: frozenset = frozenset({"match", "item", "reason"}),
-    retries: int = 3,
-) -> dict:
+        api_key: str,
+        model: str,
+        listing: Listing,
+        search: dict,
+        config: dict,
+        max_price: Optional[int] = None,
+        deep_eval: bool = False,
+        retries: int = 3,
+) -> EvaluationResult:
+    system_prompt = build_system_prompt(config)
+
+    if deep_eval:
+        step1 = _call_model(
+            api_key, model, SYSTEM_PROMPT_PREFILTER, listing, search,
+            max_price=max_price,
+            retries=retries,
+            required_fields=frozenset({"match"}),
+        )
+        log.info("  -> step1 match=%s", step1.match)
+
+        if not step1.match:
+            return step1
+
+        detail = fetch_listing_detail(listing.url, retries=retries)
+        if not detail.description and not detail.attributes:
+            log.warning("  -> step2 fetch failed, using step1 result (no detail)")
+            return EvaluationResult(match=True, item=listing.title, reason="Detail page unavailable")
+
+        extra = format_detail_context(detail)
+        evaluation = _call_model(
+            api_key, model, system_prompt, listing, search,
+            max_price=max_price,
+            extra_context=extra,
+            retries=retries,
+        )
+        log.info("  -> step2 match=%s: %s", evaluation.match, evaluation.reason)
+        return evaluation
+
+    evaluation = _call_model(api_key, model, system_prompt, listing, search, max_price=max_price, retries=retries)
+    log.info("  -> match=%s: %s", evaluation.match, evaluation.reason)
+    return evaluation
+
+
+def _call_model(
+        api_key: str,
+        model: str,
+        system_prompt: str,
+        listing: Listing,
+        search: dict,
+        max_price: Optional[int] = None,
+        extra_context: str = "",
+        retries: int = 3,
+        required_fields: frozenset = frozenset({"match", "item", "reason"}),
+) -> EvaluationResult:
     addition_prompt = search.get("addition_prompt", "").strip()
     user_msg = (
-        (f"Max price: {max_price} EUR\n" if max_price is not None else "No maximum price.\n")
-        + (f"Additional instructions: {addition_prompt}\n" if addition_prompt else "")
-        + f"\nTitle: {listing['title']}\n"
-        f"Price: {listing['price']}\n"
-        f"Location: {listing['location']}\n"
-        f"URL: {listing['url']}"
-        + (f"\n\nFull listing description and details:\n{extra_context}" if extra_context else "")
+            (f"Max price: {max_price} EUR\n" if max_price is not None else "No maximum price.\n")
+            + (f"Additional instructions: {addition_prompt}\n" if addition_prompt else "")
+            + f"\nTitle: {listing.title}\n"
+              f"Price: {listing.price}\n"
+              f"Location: {listing.location}\n"
+              f"URL: {listing.url}"
+            + (f"\n\nFull listing description and details:\n{extra_context}" if extra_context else "")
     )
-    for attempt in range(retries):
+    for attempt in range(1 + retries):
         try:
             resp = requests.post(
                 OPENROUTER_URL,
@@ -96,10 +142,9 @@ def evaluate_listing(
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
             if content is None:
-                log.warning("Evaluation for %s: empty response (attempt %d/%d)", listing["id"], attempt + 1, retries)
+                log.warning("Evaluation for %s: empty response (attempt %d/%d)", listing.id, attempt + 1, retries)
                 continue
             raw = content.strip()
-            # Strip Markdown code block if present (```json ... ```)
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -108,9 +153,13 @@ def evaluate_listing(
             result = json.loads(raw)
             if not required_fields.issubset(result):
                 missing = required_fields - result.keys()
-                log.warning("Evaluation for %s: missing fields %s (attempt %d/%d)", listing["id"], missing, attempt + 1, retries)
+                log.warning("Evaluation for %s: missing fields %s (attempt %d/%d)", listing.id, missing, attempt + 1, retries)
                 continue
-            return result
-        except (json.JSONDecodeError, requests.RequestException, KeyError, AttributeError) as e:
-            log.warning("Evaluation error for %s (attempt %d/%d): %s", listing["id"], attempt + 1, retries, e)
-    return {"match": False, "item": "", "reason": "Evaluation error"}
+            return EvaluationResult(
+                match=result["match"],
+                item=result.get("item", ""),
+                reason=result.get("reason", ""),
+            )
+        except Exception as e:
+            log.warning("Evaluation error for %s (attempt %d/%d): %s", listing.id, attempt + 1, retries, e)
+    return EvaluationResult(match=False, item="", reason="Evaluation error", error=True)

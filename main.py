@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
 """Kleinanzeigen Monitor – universal crawler with AI evaluation and Telegram notifications."""
 
-import argparse
 import logging
-import os
 import sys
 import time
 
-from dotenv import load_dotenv
-
-from src.config import ENV_FILE, load_config, resolve, setup_logging
-from src.evaluator import SYSTEM_PROMPT_PREFILTER, build_system_prompt, evaluate_listing, format_detail_context
-from src.fetcher import fetch_listing_detail, fetch_listings
+from src.config import resolve, setup_parser, load_app_config
+from src.evaluator import evaluate_listing
+from src.fetcher import fetch_listings
+from src.models.app_config import AppConfig
 from src.notifier import format_message, send_telegram, send_test_message
 from src.persistence import load_seen, save_seen
 
 log = logging.getLogger(__name__)
 
 
-def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: str, dry_run: bool = False, dont_skip_seen: bool = False) -> None:
+def run_monitor(app: AppConfig) -> None:
+    config = app.config
     model = config.get("model", {}).get("id", "google/gemini-2.0-flash-lite-001")
-    system_prompt = build_system_prompt(config)
     seen = load_seen()
     new_seen = set()
     matches = 0
@@ -45,49 +42,30 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
         log.info("%d listings found", len(listings))
 
         for listing in listings:
-            ad_id = listing["id"]
-            new_seen.add(ad_id)
-
-            if ad_id in seen and not dont_skip_seen:
+            if listing.id in seen and not app.dont_skip_seen:
                 continue
 
-            log.info("New: [%s] %s", ad_id, listing["title"][:60])
+            log.info("New: [%s] %s", listing.id, listing.title[:60])
 
-            if deep_eval:
-                step1 = evaluate_listing(
-                    api_key, model,
-                    SYSTEM_PROMPT_PREFILTER,
-                    listing, search,
-                    max_price=max_price,
-                    required_fields=frozenset({"match"}),
-                    retries=retries,
-                )
-                match = step1.get("match", False)
-                log.info("  -> step1 match=%s", match)
+            evaluation = evaluate_listing(
+                app.api_key, model, listing, search, config,
+                max_price=max_price,
+                deep_eval=deep_eval,
+                retries=retries,
+            )
 
-                if match:
-                    detail = fetch_listing_detail(listing["url"], retries=retries)
-                    if detail:
-                        extra = format_detail_context(detail)
-                        evaluation = evaluate_listing(api_key, model, system_prompt, listing, search, max_price=max_price, extra_context=extra, retries=retries)
-                    else:
-                        log.warning("  -> step2 fetch failed, using step1 result (no detail)")
-                        evaluation = {"match": True, "item": listing["title"], "reason": "Detail page unavailable"}
-                    match = evaluation.get("match", False)
-                    log.info("  -> step2 match=%s: %s", match, evaluation.get("reason", ""))
-                else:
-                    evaluation = step1
-            else:
-                evaluation = evaluate_listing(api_key, model, system_prompt, listing, search, max_price=max_price, retries=retries)
-                match = evaluation.get("match", False)
-                log.info("  -> match=%s: %s", match, evaluation.get("reason", ""))
+            if evaluation.error:
+                log.warning("  -> skipping seen.json update for %s due to evaluation error", listing.id)
+                continue
 
-            if match:
+            new_seen.add(listing.id)
+
+            if evaluation.match:
                 msg = format_message(listing, evaluation)
-                if dry_run:
+                if app.dry_run:
                     log.info("  -> [dry-run] would send: %s", msg)
                     matches += 1
-                elif send_telegram(telegram_token, telegram_chat, msg):
+                elif send_telegram(app.telegram_token, app.telegram_chat, msg):
                     log.info("  -> Telegram message sent")
                     matches += 1
 
@@ -101,52 +79,14 @@ def run_monitor(config: dict, api_key: str, telegram_token: str, telegram_chat: 
 
 
 def main() -> None:
-    setup_logging()
-    parser = argparse.ArgumentParser(
-        description=(
-            "Monitors Kleinanzeigen searches and sends Telegram notifications for new\n"
-            "listings that match your criteria, evaluated by an AI model via OpenRouter.\n\n"
-            "Configured via config.toml and .env (see config.example.toml / .env.example)."
-        ),
-        epilog=(
-            "examples:\n"
-            "  main.py                           normal run\n"
-            "  main.py --dry-run                 test without sending notifications\n"
-            "  main.py --dry-run --dont-skip-seen\n"
-            "                                       debug evaluation against known listings\n"
-            "  main.py --test-telegram           verify Telegram is configured correctly"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--test-telegram", action="store_true", help="Send a test Telegram message to verify bot credentials, then exit.")
-    parser.add_argument("--dry-run", action="store_true", help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
-    parser.add_argument("--dont-skip-seen", action="store_true", help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
-    args = parser.parse_args()
-
-    load_dotenv(ENV_FILE)
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        log.error("%s", e)
-        sys.exit(1)
-
-    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    telegram_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-
-    if not telegram_token or not telegram_chat:
-        log.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in .env (see .env.example).")
-        sys.exit(1)
+    args = setup_parser().parse_args()
+    app = load_app_config(args)
 
     if args.test_telegram:
-        send_test_message(telegram_token, telegram_chat)
+        send_test_message(app.telegram_token, app.telegram_chat)
         return
 
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key:
-        log.error("OPENROUTER_API_KEY must be set in .env (see .env.example).")
-        sys.exit(1)
-
-    run_monitor(config, api_key, telegram_token, telegram_chat, dry_run=args.dry_run, dont_skip_seen=args.dont_skip_seen)
+    run_monitor(app)
 
 
 if __name__ == "__main__":

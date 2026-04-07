@@ -15,6 +15,9 @@ id = "google/gemini-2.0-flash-lite-001"
 # Number of retries on connection errors (0 = no retry)
 retries = 2
 
+[logging]
+level = "INFO"   # DEBUG | INFO | WARNING | ERROR | CRITICAL
+
 [assistant]
 # Shared context for all searches (optional)
 common_prompt = "I'm looking for used items in good condition at fair prices."

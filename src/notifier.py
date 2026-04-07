@@ -1,9 +1,11 @@
 """Telegram notification."""
-
 import logging
 import sys
 
 import requests
+
+from .models.listing import Listing
+from .models.evaluationResult import EvaluationResult
 
 log = logging.getLogger(__name__)
 
@@ -41,11 +43,9 @@ def send_test_message(token: str, chat_id: str) -> None:
         sys.exit(1)
 
 
-def format_message(listing: dict, evaluation: dict) -> str:
-    item = evaluation["item"]
-    reason = evaluation.get("reason", "")
+def format_message(listing: Listing, evaluation: EvaluationResult) -> str:
     return (
-        f"{item} - {listing['price']} – {listing['location']}\n"
-        f"{reason}\n"
-        f"{listing['url']}"
+        f"{evaluation.item} - {listing.price} – {listing.location}\n"
+        f"{evaluation.reason}\n"
+        f"{listing.url}"
     )

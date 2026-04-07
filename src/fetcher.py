@@ -1,11 +1,13 @@
 """Kleinanzeigen scraping."""
-
 import logging
 import time
 from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
+
+from .models.listing import Listing
+from .models.listingDetail import ListingDetail
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ def _get_with_retry(url: str, retries: int) -> Optional[requests.Response]:
     return None
 
 
-def fetch_listings(url: str, retries: int = 2) -> list[dict]:
+def fetch_listings(url: str, retries: int = 2) -> list[Listing]:
     resp = _get_with_retry(url, retries)
     if resp is None:
         return []
@@ -63,15 +65,15 @@ def fetch_listings(url: str, retries: int = 2) -> list[dict]:
         if href.startswith("/"):
             href = "https://www.kleinanzeigen.de" + href
 
-        listings.append({"id": ad_id, "title": title, "price": price, "location": location, "url": href})
+        listings.append(Listing(id=ad_id, title=title, price=price, location=location, url=href))
 
     return listings
 
 
-def fetch_listing_detail(url: str, retries: int = 2) -> dict:
+def fetch_listing_detail(url: str, retries: int = 2) -> ListingDetail:
     resp = _get_with_retry(url, retries)
     if resp is None:
-        return {}
+        return ListingDetail()
 
     try:
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -91,7 +93,7 @@ def fetch_listing_detail(url: str, retries: int = 2) -> dict:
         shipping_text = shipping_el.get_text(strip=True) if shipping_el else ""
         shipping = shipping_text if shipping_text else "Shipping available"
 
-        return {"description": description, "attributes": attributes, "shipping": shipping}
+        return ListingDetail(description=description, attributes=attributes, shipping=shipping)
     except Exception as e:
         log.warning("Error parsing detail page %s: %s", url, e)
-        return {}
+        return ListingDetail()
