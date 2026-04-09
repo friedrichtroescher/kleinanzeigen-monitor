@@ -11,71 +11,90 @@ from src.fetcher import fetch_listings
 from src.models.app_config import AppConfig
 from src.notifier import format_message, send_telegram, send_test_message
 from src.persistence import load_seen, save_seen
+from src.telemetry import (
+    init_telemetry, shutdown_telemetry, tracer,
+    listings_fetched, listings_new, listings_matched, eval_errors, run_duration,
+)
 
 log = logging.getLogger(__name__)
 
 
 def run_monitor(app: AppConfig) -> None:
-    config = app.config
-    model = config.get("model", {}).get("id", "google/gemini-2.0-flash-lite-001")
-    seen = load_seen()
-    new_seen = set()
-    matches = 0
+    with tracer.start_as_current_span("run_monitor") as root_span:
+        start = time.monotonic()
+        config = app.config
+        model = config.get("model", {}).get("id", "google/gemini-2.0-flash-lite-001")
+        seen = load_seen()
+        new_seen = set()
+        matches = 0
 
-    retries = config.get("network", {}).get("retries", 2)
-    searches = get_searches(config)
+        retries = config.get("network", {}).get("retries", 2)
+        searches = get_searches(config)
 
-    if not searches:
-        log.error("No searches configured in config.toml.")
-        sys.exit(1)
+        if not searches:
+            log.error("No searches configured in config.toml.")
+            sys.exit(1)
 
-    for search in searches:
-        url = search.get("url", "")
-        if not url:
-            log.warning("Search has no URL – skipped.")
-            continue
+        root_span.set_attribute("search.count", len(searches))
 
-        deep_eval = resolve(search, config, "deep_eval", False)
-        max_price = resolve(search, config, "max_price", None)
-        log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
-        listings = fetch_listings(url, retries=retries)
-        log.info("%d listings found", len(listings))
-
-        for listing in listings:
-            if listing.id in seen and not app.dont_skip_seen:
+        for search in searches:
+            url = search.get("url", "")
+            if not url:
+                log.warning("Search has no URL – skipped.")
                 continue
 
-            log.info("New: [%s] %s", listing.id, listing.title[:60])
+            deep_eval = resolve(search, config, "deep_eval", False)
+            max_price = resolve(search, config, "max_price", None)
 
-            evaluation = evaluate_listing(
-                app.api_key, model, listing, search, config,
-                max_price=max_price,
-                deep_eval=deep_eval,
-                retries=retries,
-            )
+            with tracer.start_as_current_span("process_search", attributes={
+                "search.url": url,
+                "search.max_price": str(max_price) if max_price is not None else "",
+                "search.deep_eval": deep_eval,
+            }):
+                log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
+                listings = fetch_listings(url, retries=retries)
+                log.info("%d listings found", len(listings))
+                listings_fetched.add(len(listings))
 
-            if evaluation.error:
-                log.warning("  -> skipping seen.json update for %s due to evaluation error", listing.id)
-                continue
+                for listing in listings:
+                    if listing.id in seen and not app.dont_skip_seen:
+                        continue
 
-            new_seen.add(listing.id)
+                    listings_new.add(1)
+                    log.info("New: [%s] %s", listing.id, listing.title[:60])
 
-            if evaluation.match:
-                msg = format_message(listing, evaluation)
-                if app.dry_run:
-                    log.info("  -> [dry-run] would send: %s", msg)
-                    matches += 1
-                elif send_telegram(app.telegram_token, app.telegram_chat, msg):
-                    log.info("  -> Telegram message sent")
-                    matches += 1
+                    evaluation = evaluate_listing(
+                        app.api_key, model, listing, search, config,
+                        max_price=max_price,
+                        deep_eval=deep_eval,
+                        retries=retries,
+                    )
 
-            time.sleep(0.5)
+                    if evaluation.error:
+                        eval_errors.add(1)
+                        log.warning("  -> skipping seen.json update for %s due to evaluation error", listing.id)
+                        continue
 
-        seen.update(new_seen)
-        save_seen(seen)
-        time.sleep(2)
+                    new_seen.add(listing.id)
 
-    log.info("Done. %d matches sent. %d IDs known.", matches, len(seen))
+                    if evaluation.match:
+                        msg = format_message(listing, evaluation)
+                        if app.dry_run:
+                            log.info("  -> [dry-run] would send: %s", msg)
+                            matches += 1
+                        elif send_telegram(app.telegram_token, app.telegram_chat, msg):
+                            log.info("  -> Telegram message sent")
+                            matches += 1
+                        listings_matched.add(1)
+
+                    time.sleep(0.5)
+
+                seen.update(new_seen)
+                save_seen(seen)
+                time.sleep(2)
+
+        log.info("Done. %d matches sent. %d IDs known.", matches, len(seen))
+        run_duration.record(time.monotonic() - start)
 
 
 def main() -> None:
@@ -84,19 +103,22 @@ def main() -> None:
 
     if args.command == "search":
         if args.search_action == "add":
-            add_search(args.url, addition_prompt=args.addition_prompt, max_price=args.max_price, deep_eval=args.deep_eval)
+            add_search(args.url, addition_prompt=args.addition_prompt, max_price=args.max_price,
+                       deep_eval=args.deep_eval)
         else:
             list_searches()
         return
 
     if args.command == "run":
         app = load_app_config(args)
-
-        if args.test_telegram:
-            send_test_message(app.telegram_token, app.telegram_chat)
-            return
-
-        run_monitor(app)
+        init_telemetry()
+        try:
+            if args.test_telegram:
+                send_test_message(app.telegram_token, app.telegram_chat)
+                return
+            run_monitor(app)
+        finally:
+            shutdown_telemetry()
         return
 
     parser.print_help()

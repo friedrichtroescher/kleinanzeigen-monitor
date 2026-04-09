@@ -9,6 +9,7 @@ from .fetcher import fetch_listing_detail
 from .models.listing import Listing
 from .models.evaluationResult import EvaluationResult
 from .models.listingDetail import ListingDetail
+from .telemetry import tracer
 
 log = logging.getLogger(__name__)
 
@@ -68,38 +69,46 @@ def evaluate_listing(
         deep_eval: bool = False,
         retries: int = 3,
 ) -> EvaluationResult:
-    system_prompt = build_system_prompt(config)
+    with tracer.start_as_current_span("evaluate_listing", attributes={
+        "listing.id": listing.id,
+        "evaluation.deep_eval": deep_eval,
+    }) as span:
+        system_prompt = build_system_prompt(config)
 
-    if deep_eval:
-        step1 = _call_model(
-            api_key, model, SYSTEM_PROMPT_PREFILTER, listing, search,
-            max_price=max_price,
-            retries=retries,
-            required_fields=frozenset({"match"}),
-        )
-        log.info("  -> step1 match=%s", step1.match)
+        if deep_eval:
+            step1 = _call_model(
+                api_key, model, SYSTEM_PROMPT_PREFILTER, listing, search,
+                max_price=max_price,
+                retries=retries,
+                required_fields=frozenset({"match"}),
+            )
+            log.info("  -> step1 match=%s", step1.match)
 
-        if not step1.match:
-            return step1
+            if not step1.match:
+                span.set_attribute("evaluation.match", False)
+                return step1
 
-        detail = fetch_listing_detail(listing.url, retries=retries)
-        if not detail.description and not detail.attributes:
-            log.warning("  -> step2 fetch failed, using step1 result (no detail)")
-            return EvaluationResult(match=True, item=listing.title, reason="Detail page unavailable")
+            detail = fetch_listing_detail(listing.url, retries=retries)
+            if not detail.description and not detail.attributes:
+                log.warning("  -> step2 fetch failed, using step1 result (no detail)")
+                span.set_attribute("evaluation.match", True)
+                return EvaluationResult(match=True, item=listing.title, reason="Detail page unavailable")
 
-        extra = format_detail_context(detail)
-        evaluation = _call_model(
-            api_key, model, system_prompt, listing, search,
-            max_price=max_price,
-            extra_context=extra,
-            retries=retries,
-        )
-        log.info("  -> step2 match=%s: %s", evaluation.match, evaluation.reason)
+            extra = format_detail_context(detail)
+            evaluation = _call_model(
+                api_key, model, system_prompt, listing, search,
+                max_price=max_price,
+                extra_context=extra,
+                retries=retries,
+            )
+            log.info("  -> step2 match=%s: %s", evaluation.match, evaluation.reason)
+            span.set_attribute("evaluation.match", evaluation.match)
+            return evaluation
+
+        evaluation = _call_model(api_key, model, system_prompt, listing, search, max_price=max_price, retries=retries)
+        log.info("  -> match=%s: %s", evaluation.match, evaluation.reason)
+        span.set_attribute("evaluation.match", evaluation.match)
         return evaluation
-
-    evaluation = _call_model(api_key, model, system_prompt, listing, search, max_price=max_price, retries=retries)
-    log.info("  -> match=%s: %s", evaluation.match, evaluation.reason)
-    return evaluation
 
 
 def _call_model(
