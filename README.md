@@ -72,7 +72,7 @@ uv run main.py                   # Single run
 crontab -l                       # Check cron jobs
 ```
 
-### 6. Add `monitor` to your PATH (optional)
+### 6. Add `monitor` to your PATH (if you want)
 
 Add the project directory to your PATH to use `monitor` as a global command:
 
