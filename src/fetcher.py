@@ -43,7 +43,7 @@ def fetch_listings(url: str, retries: int = 2) -> list[Listing]:
     if resp is None:
         return []
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.text, "lxml")
     listings = []
 
     for article in soup.select("article[data-adid]"):
@@ -76,7 +76,7 @@ def fetch_listing_detail(url: str, retries: int = 2) -> ListingDetail:
         return ListingDetail()
 
     try:
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         desc_el = soup.select_one("#viewad-description-text")
         description = desc_el.get_text(separator="\n", strip=True) if desc_el else ""
