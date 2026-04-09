@@ -5,7 +5,7 @@ import logging
 import sys
 import time
 
-from src.config import resolve, setup_parser, load_app_config
+from src.config import resolve, setup_parser, load_app_config, get_searches, list_searches, add_search
 from src.evaluator import evaluate_listing
 from src.fetcher import fetch_listings
 from src.models.app_config import AppConfig
@@ -23,7 +23,7 @@ def run_monitor(app: AppConfig) -> None:
     matches = 0
 
     retries = config.get("network", {}).get("retries", 2)
-    searches = config.get("searches", [])
+    searches = get_searches(config)
 
     if not searches:
         log.error("No searches configured in config.toml.")
@@ -80,6 +80,14 @@ def run_monitor(app: AppConfig) -> None:
 
 def main() -> None:
     args = setup_parser().parse_args()
+
+    if args.command == "search":
+        if args.search_action == "add":
+            add_search(args.url, addition_prompt=args.addition_prompt, max_price=args.max_price, deep_eval=args.deep_eval)
+        else:
+            list_searches()
+        return
+
     app = load_app_config(args)
 
     if args.test_telegram:

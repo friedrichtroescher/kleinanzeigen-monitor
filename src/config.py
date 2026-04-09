@@ -98,11 +98,66 @@ def setup_parser() -> argparse.ArgumentParser:
             "  main.py --dry-run                 test without sending notifications\n"
             "  main.py --dry-run --dont-skip-seen\n"
             "                                       debug evaluation against known listings\n"
-            "  main.py --test-telegram           verify Telegram is configured correctly"
+            "  main.py --test-telegram           verify Telegram is configured correctly\n"
+            "  main.py search list             list all configured search URLs\n"
+            '  main.py search add "https://www.kleinanzeigen.de/s-foo/k0" --prompt "..."\n'
+            "                                       add a new search to config.toml"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--test-telegram", action="store_true", help="Send a test Telegram message to verify bot credentials, then exit.")
     parser.add_argument("--dry-run", action="store_true", help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
     parser.add_argument("--dont-skip-seen", action="store_true", help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
+
+    subparsers = parser.add_subparsers(dest="command")
+    search_parser = subparsers.add_parser("search", help="Manage search URLs in config.toml")
+    search_sub = search_parser.add_subparsers(dest="search_action")
+    search_sub.add_parser("list", help="List all configured search URLs")
+    add_parser = search_sub.add_parser("add", help="Add a new search to config.toml")
+    add_parser.add_argument("url", help="Kleinanzeigen search URL")
+    add_parser.add_argument("--prompt", dest="addition_prompt", help="Evaluation prompt for this search")
+    add_parser.add_argument("--max-price", type=int, help="Maximum price filter")
+    add_parser.add_argument("--deep-eval", action="store_true", default=None, help="Enable deep evaluation (fetch detail pages)")
+
     return parser
+
+
+def get_searches(config: dict) -> list[dict]:
+    """Return the list of [[searches]] blocks from a loaded config."""
+    return config.get("searches", [])
+
+
+def list_searches() -> None:
+    searches = get_searches(load_config())
+    if not searches:
+        print("No searches configured in config.toml.")
+        return
+    for i, s in enumerate(searches, 1):
+        url = s.get("url", "(no url)")
+        prompt = s.get("addition_prompt", "")
+        max_price = s.get("max_price")
+        deep = s.get("deep_eval")
+        parts = [f"  {url}"]
+        if max_price is not None:
+            parts.append(f"  max_price = {max_price}")
+        if deep is not None:
+            parts.append(f"  deep_eval = {str(deep).lower()}")
+        if prompt:
+            parts.append(f'  prompt = "{prompt}"')
+        print(f"[{i}]")
+        print("\n".join(parts))
+
+
+def add_search(url: str, addition_prompt: str | None = None, max_price: int | None = None, deep_eval: bool | None = None) -> None:
+    block = '\n[[searches]]\n'
+    block += f'url = "{url}"\n'
+    if max_price is not None:
+        block += f'max_price = {max_price}\n'
+    if deep_eval is not None:
+        block += f'deep_eval = {"true" if deep_eval else "false"}\n'
+    if addition_prompt:
+        block += f'addition_prompt = "{addition_prompt}"\n'
+
+    with open(CONFIG_FILE, "a") as f:
+        f.write(block)
+    print(f"Added search: {url}")
