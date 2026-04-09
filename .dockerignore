@@ -1,0 +1,8 @@
+.env
+config.toml
+seen.json
+monitor.log
+.git/
+__pycache__/
+tests/
+*.md

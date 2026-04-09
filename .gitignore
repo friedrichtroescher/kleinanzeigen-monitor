@@ -1,8 +1,9 @@
-./seen.json
-./config.toml
+seen.json
+config.toml
+monitor.log
 .idea/*
 !.idea/runConfigurations/
 .vscode
 .env
-config.toml
 __pycache__/
+cloudify-this-plan.md

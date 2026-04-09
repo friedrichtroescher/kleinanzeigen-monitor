@@ -11,10 +11,9 @@ from dotenv import load_dotenv
 from .models.app_config import AppConfig
 
 BASE_DIR = Path(__file__).parent.parent
-SEEN_FILE = BASE_DIR / "seen.json"
+SEEN_FILE = Path(os.environ.get("SEEN_FILE", BASE_DIR / "seen.json"))
 ENV_FILE = BASE_DIR / ".env"
-CONFIG_FILE = BASE_DIR / "config.toml"
-LOG_FILE = BASE_DIR / "monitor.log"
+CONFIG_FILE = Path(os.environ.get("CONFIG_FILE", BASE_DIR / "config.toml"))
 
 log = logging.getLogger(__name__)
 
@@ -73,16 +72,20 @@ def setup_logging(config: dict | None = None) -> None:
         level = logging.INFO
 
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
-    sh = logging.StreamHandler(sys.stdout)
-    fh.setFormatter(fmt)
-    sh.setFormatter(fmt)
 
     root = logging.getLogger()
     root.setLevel(level)
     root.handlers.clear()
-    root.addHandler(fh)
+
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(fmt)
     root.addHandler(sh)
+
+    log_file = os.environ.get("LOG_FILE")
+    if log_file:
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
 
 
 def setup_parser() -> argparse.ArgumentParser:
