@@ -71,3 +71,21 @@ uv run main.py --test-telegram   # Send a test message via Telegram
 uv run main.py                   # Single run
 crontab -l                       # Check cron jobs
 ```
+
+### 6. Add `monitor` to your PATH (optional)
+
+Add the project directory to your PATH to use `monitor` as a global command:
+
+```bash
+echo 'export PATH="$HOME/path/to/kleinanzeigen-monitor:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Then run from anywhere:
+
+```bash
+monitor                          # Normal run
+monitor --dry-run                # Test without sending notifications
+monitor search list              # List configured searches
+monitor search add "https://www.kleinanzeigen.de/s-foo/k0" --prompt "..."
+```
