@@ -87,6 +87,7 @@ def setup_logging(config: dict | None = None) -> None:
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="monitor",
         description=(
             "Monitors Kleinanzeigen searches and sends Telegram notifications for new\n"
             "listings that match your criteria, evaluated by an AI model via OpenRouter.\n\n"
@@ -94,22 +95,25 @@ def setup_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "examples:\n"
-            "  main.py                           normal run\n"
-            "  main.py --dry-run                 test without sending notifications\n"
-            "  main.py --dry-run --dont-skip-seen\n"
+            "  ./monitor run                      normal run\n"
+            "  ./monitor run --dry-run             test without sending notifications\n"
+            "  ./monitor run --dry-run --dont-skip-seen\n"
             "                                       debug evaluation against known listings\n"
-            "  main.py --test-telegram           verify Telegram is configured correctly\n"
-            "  main.py search list             list all configured search URLs\n"
-            '  main.py search add "https://www.kleinanzeigen.de/s-foo/k0" --prompt "..."\n'
+            "  ./monitor run --test-telegram       verify Telegram is configured correctly\n"
+            "  ./monitor search list             list all configured search URLs\n"
+            '  ./monitor search add "https://www.kleinanzeigen.de/s-foo/k0" --prompt "..."\n'
             "                                       add a new search to config.toml"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--test-telegram", action="store_true", help="Send a test Telegram message to verify bot credentials, then exit.")
-    parser.add_argument("--dry-run", action="store_true", help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
-    parser.add_argument("--dont-skip-seen", action="store_true", help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
 
     subparsers = parser.add_subparsers(dest="command")
+
+    run_parser = subparsers.add_parser("run", help="Run the monitor (fetch, evaluate, notify)")
+    run_parser.add_argument("--test-telegram", action="store_true", help="Send a test Telegram message to verify bot credentials, then exit.")
+    run_parser.add_argument("--dry-run", action="store_true", help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
+    run_parser.add_argument("--dont-skip-seen", action="store_true", help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
+
     search_parser = subparsers.add_parser("search", help="Manage search URLs in config.toml")
     search_sub = search_parser.add_subparsers(dest="search_action")
     search_sub.add_parser("list", help="List all configured search URLs")

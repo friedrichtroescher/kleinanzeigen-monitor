@@ -79,7 +79,8 @@ def run_monitor(app: AppConfig) -> None:
 
 
 def main() -> None:
-    args = setup_parser().parse_args()
+    parser = setup_parser()
+    args = parser.parse_args()
 
     if args.command == "search":
         if args.search_action == "add":
@@ -88,13 +89,17 @@ def main() -> None:
             list_searches()
         return
 
-    app = load_app_config(args)
+    if args.command == "run":
+        app = load_app_config(args)
 
-    if args.test_telegram:
-        send_test_message(app.telegram_token, app.telegram_chat)
+        if args.test_telegram:
+            send_test_message(app.telegram_token, app.telegram_chat)
+            return
+
+        run_monitor(app)
         return
 
-    run_monitor(app)
+    parser.print_help()
 
 
 if __name__ == "__main__":
