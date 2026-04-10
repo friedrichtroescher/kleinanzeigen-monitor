@@ -15,7 +15,11 @@ listings_fetched = meter.create_counter("monitor.listings.fetched", description=
 listings_new = meter.create_counter("monitor.listings.new", description="New listings evaluated")
 listings_matched = meter.create_counter("monitor.listings.matched", description="Matched listings sent")
 eval_errors = meter.create_counter("monitor.evaluations.errors", description="Evaluation errors")
+scrape_rejections = meter.create_counter("monitor.scrape.rejections", description="Scraping rejected by Kleinanzeigen (403/429)")
 run_duration = meter.create_histogram("monitor.run.duration_seconds", description="Total run duration", unit="s")
+search_duration = meter.create_histogram("monitor.search.duration_seconds", description="Duration of a single search (fetch + evaluate)", unit="s")
+prefilter_rejections = meter.create_counter("monitor.evaluations.prefilter_rejections", description="Listings rejected by the deep_eval prefilter")
+detail_fetch_failures = meter.create_counter("monitor.listings.detail_fetch_failures", description="Detail page fetch failures during deep_eval")
 
 
 def init_telemetry() -> None:
@@ -40,6 +44,8 @@ def init_telemetry() -> None:
 
     resource = Resource.create({
         "service.name": os.environ.get("OTEL_SERVICE_NAME", "kleinanzeigen-monitor"),
+        "service.namespace": "kleinanzeigen",
+        "deployment.environment": os.environ.get("DEPLOYMENT_ENVIRONMENT", "production"),
     })
 
     # Traces
@@ -56,7 +62,8 @@ def init_telemetry() -> None:
     _logger_provider = LoggerProvider(resource=resource)
     _logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
     _logs.set_logger_provider(_logger_provider)
-    logging.getLogger().addHandler(LoggingHandler(logger_provider=_logger_provider))
+    handler = LoggingHandler(level=logging.NOTSET, logger_provider=_logger_provider)
+    logging.getLogger().addHandler(handler)
 
     # Auto-instrument requests library
     RequestsInstrumentor().instrument()

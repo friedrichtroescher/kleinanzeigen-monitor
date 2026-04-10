@@ -1,7 +1,25 @@
 import tomllib
 from unittest.mock import patch
 
-from src.config import get_searches, list_searches, add_search
+from src.config import get_searches, list_searches, add_search, search_label
+
+
+# ── search_label ────────────────────────────────────────────────────────────
+
+def test_search_label_extracts_term():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-fahrraeder/k0"}) == "fahrraeder"
+
+
+def test_search_label_with_filters():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-anderes-beispiel/anzeige:angebote/preis:100:500/c217"}) == "anderes-beispiel"
+
+
+def test_search_label_fallback_to_url():
+    assert search_label({"url": "https://example.com/no-match"}) == "https://example.com/no-match"
+
+
+def test_search_label_empty_url():
+    assert search_label({}) == ""
 
 
 # ── get_searches ────────────────────────────────────────────────────────────

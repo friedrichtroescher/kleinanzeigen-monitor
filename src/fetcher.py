@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 
 from .models.listing import Listing
 from .models.listingDetail import ListingDetail
+from .telemetry import scrape_rejections
 
 log = logging.getLogger(__name__)
 
@@ -22,10 +23,13 @@ BROWSER_HEADERS = {
 }
 
 
-def _get_with_retry(url: str, retries: int) -> Optional[requests.Response]:
+def _get_with_retry(url: str, retries: int, search_name: str = "") -> Optional[requests.Response]:
     for attempt in range(1 + retries):
         try:
             resp = requests.get(url, headers=BROWSER_HEADERS, timeout=15)
+            if resp.status_code in (403, 429):
+                scrape_rejections.add(1, {"http.status_code": resp.status_code, "search.name": search_name})
+                log.warning("Scraping rejected (%d) for %s", resp.status_code, url)
             resp.raise_for_status()
             return resp
         except requests.RequestException as e:
@@ -38,8 +42,8 @@ def _get_with_retry(url: str, retries: int) -> Optional[requests.Response]:
     return None
 
 
-def fetch_listings(url: str, retries: int = 2) -> list[Listing]:
-    resp = _get_with_retry(url, retries)
+def fetch_listings(url: str, retries: int = 2, search_name: str = "") -> list[Listing]:
+    resp = _get_with_retry(url, retries, search_name=search_name)
     if resp is None:
         return []
 
@@ -70,8 +74,8 @@ def fetch_listings(url: str, retries: int = 2) -> list[Listing]:
     return listings
 
 
-def fetch_listing_detail(url: str, retries: int = 2) -> ListingDetail:
-    resp = _get_with_retry(url, retries)
+def fetch_listing_detail(url: str, retries: int = 2, search_name: str = "") -> ListingDetail:
+    resp = _get_with_retry(url, retries, search_name=search_name)
     if resp is None:
         return ListingDetail()
 

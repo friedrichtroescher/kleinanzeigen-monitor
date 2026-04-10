@@ -9,7 +9,7 @@ from .fetcher import fetch_listing_detail
 from .models.listing import Listing
 from .models.evaluationResult import EvaluationResult
 from .models.listingDetail import ListingDetail
-from .telemetry import tracer
+from .telemetry import tracer, prefilter_rejections, detail_fetch_failures
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ def evaluate_listing(
         max_price: Optional[int] = None,
         deep_eval: bool = False,
         retries: int = 3,
+        search_name: str = "",
 ) -> EvaluationResult:
     with tracer.start_as_current_span("evaluate_listing", attributes={
         "listing.id": listing.id,
@@ -85,11 +86,13 @@ def evaluate_listing(
             log.info("  -> step1 match=%s", step1.match)
 
             if not step1.match:
+                prefilter_rejections.add(1, {"search.name": search_name})
                 span.set_attribute("evaluation.match", False)
                 return step1
 
-            detail = fetch_listing_detail(listing.url, retries=retries)
+            detail = fetch_listing_detail(listing.url, retries=retries, search_name=search_name)
             if not detail.description and not detail.attributes:
+                detail_fetch_failures.add(1, {"search.name": search_name})
                 log.warning("  -> step2 fetch failed, using step1 result (no detail)")
                 span.set_attribute("evaluation.match", True)
                 return EvaluationResult(match=True, item=listing.title, reason="Detail page unavailable")

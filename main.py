@@ -5,7 +5,7 @@ import logging
 import sys
 import time
 
-from src.config import resolve, setup_parser, load_app_config, get_searches, list_searches, add_search
+from src.config import resolve, search_label, setup_parser, load_app_config, get_searches, list_searches, add_search
 from src.evaluator import evaluate_listing
 from src.fetcher import fetch_listings
 from src.models.app_config import AppConfig
@@ -14,6 +14,7 @@ from src.persistence import load_seen, save_seen
 from src.telemetry import (
     init_telemetry, shutdown_telemetry, tracer,
     listings_fetched, listings_new, listings_matched, eval_errors, run_duration,
+    search_duration,
 )
 
 log = logging.getLogger(__name__)
@@ -45,22 +46,26 @@ def run_monitor(app: AppConfig) -> None:
 
             deep_eval = resolve(search, config, "deep_eval", False)
             max_price = resolve(search, config, "max_price", None)
+            label = search_label(search)
+            attrs = {"search.name": label}
 
             with tracer.start_as_current_span("process_search", attributes={
+                "search.name": label,
                 "search.url": url,
                 "search.max_price": str(max_price) if max_price is not None else "",
                 "search.deep_eval": deep_eval,
             }):
+                search_start = time.monotonic()
                 log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
-                listings = fetch_listings(url, retries=retries)
+                listings = fetch_listings(url, retries=retries, search_name=label)
                 log.info("%d listings found", len(listings))
-                listings_fetched.add(len(listings))
+                listings_fetched.add(len(listings), attrs)
 
                 for listing in listings:
                     if listing.id in seen and not app.dont_skip_seen:
                         continue
 
-                    listings_new.add(1)
+                    listings_new.add(1, attrs)
                     log.info("New: [%s] %s", listing.id, listing.title[:60])
 
                     evaluation = evaluate_listing(
@@ -68,10 +73,11 @@ def run_monitor(app: AppConfig) -> None:
                         max_price=max_price,
                         deep_eval=deep_eval,
                         retries=retries,
+                        search_name=label,
                     )
 
                     if evaluation.error:
-                        eval_errors.add(1)
+                        eval_errors.add(1, attrs)
                         log.warning("  -> skipping seen.json update for %s due to evaluation error", listing.id)
                         continue
 
@@ -85,10 +91,11 @@ def run_monitor(app: AppConfig) -> None:
                         elif send_telegram(app.telegram_token, app.telegram_chat, msg):
                             log.info("  -> Telegram message sent")
                             matches += 1
-                        listings_matched.add(1)
+                        listings_matched.add(1, attrs)
 
                     time.sleep(0.5)
 
+                search_duration.record(time.monotonic() - search_start, attrs)
                 seen.update(new_seen)
                 save_seen(seen)
                 time.sleep(2)

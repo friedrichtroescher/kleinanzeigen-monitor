@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -55,6 +56,13 @@ def load_app_config(args: argparse.Namespace) -> AppConfig:
         dry_run=args.dry_run,
         dont_skip_seen=args.dont_skip_seen,
     )
+
+
+def search_label(search: dict) -> str:
+    """Extract a short label from the Kleinanzeigen search URL (e.g. 'fahrraeder' from '/s-fahrraeder/...')."""
+    url = search.get("url", "")
+    m = re.search(r"/s-([^/]+)", url)
+    return m.group(1) if m else url
 
 
 def resolve(search: dict, config: dict, key: str, default):
