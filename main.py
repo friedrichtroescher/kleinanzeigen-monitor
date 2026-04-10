@@ -14,7 +14,7 @@ from src.persistence import load_seen, save_seen
 from src.telemetry import (
     init_telemetry, shutdown_telemetry, tracer,
     listings_fetched, listings_new, listings_matched, eval_errors, run_duration,
-    search_duration,
+    search_duration, prefilter_rejections, detail_fetch_failures, scrape_rejections,
 )
 
 log = logging.getLogger(__name__)
@@ -55,6 +55,10 @@ def run_monitor(app: AppConfig) -> None:
                 "search.max_price": str(max_price) if max_price is not None else "",
                 "search.deep_eval": deep_eval,
             }):
+                # Initialize all counters for this search so time series exist in Prometheus
+                for c in (listings_fetched, listings_new, listings_matched, eval_errors,
+                          prefilter_rejections, detail_fetch_failures, scrape_rejections):
+                    c.add(0, attrs)
                 search_start = time.monotonic()
                 log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
                 listings = fetch_listings(url, retries=retries, search_name=label)
