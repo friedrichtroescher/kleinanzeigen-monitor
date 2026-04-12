@@ -20,6 +20,11 @@ run_duration = meter.create_histogram("monitor.run.duration_seconds", descriptio
 search_duration = meter.create_histogram("monitor.search.duration_seconds", description="Duration of a single search (fetch + evaluate)", unit="s")
 prefilter_rejections = meter.create_counter("monitor.evaluations.prefilter_rejections", description="Listings rejected by the deep_eval prefilter")
 detail_fetch_failures = meter.create_counter("monitor.listings.detail_fetch_failures", description="Detail page fetch failures during deep_eval")
+listing_price = meter.create_histogram(
+    "monitor.listings.price_euros",
+    description="Listing prices in EUR per search",
+    unit="EUR",
+)
 
 
 def init_telemetry() -> None:

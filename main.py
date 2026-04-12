@@ -7,7 +7,7 @@ import time
 
 from src.config import resolve, search_label, setup_parser, load_app_config, get_searches, list_searches, add_search
 from src.evaluator import evaluate_listing
-from src.fetcher import fetch_listings
+from src.fetcher import fetch_listings, parse_price
 from src.models.app_config import AppConfig
 from src.notifier import format_message, send_telegram, send_test_message
 from src.persistence import load_seen, save_seen
@@ -15,6 +15,7 @@ from src.telemetry import (
     init_telemetry, shutdown_telemetry, tracer,
     listings_fetched, listings_new, listings_matched, eval_errors, run_duration,
     search_duration, prefilter_rejections, detail_fetch_failures, scrape_rejections,
+    listing_price,
 )
 
 log = logging.getLogger(__name__)
@@ -72,9 +73,18 @@ def run_monitor(app: AppConfig) -> None:
                     listings_new.add(1, attrs)
                     log.info("New: [%s] %s", listing.id, listing.title[:60])
 
+                    price_eur = parse_price(listing.price)
+
+                    if max_price is not None and price_eur is not None and price_eur > max_price:
+                        new_seen.add(listing.id)
+                        listing_price.record(price_eur, attrs)
+                        log.info("  -> price %.0f € exceeds limit %d € — skipped", price_eur, max_price)
+                        time.sleep(0.5)
+                        continue
+
                     evaluation = evaluate_listing(
                         app.api_key, model, listing, search, config,
-                        max_price=max_price,
+                        max_price=max_price if price_eur is None else None,
                         deep_eval=deep_eval,
                         retries=retries,
                         search_name=label,
@@ -83,11 +93,10 @@ def run_monitor(app: AppConfig) -> None:
                     if evaluation.error:
                         eval_errors.add(1, attrs)
                         log.warning("  -> skipping seen.json update for %s due to evaluation error", listing.id)
-                        continue
-
-                    new_seen.add(listing.id)
-
-                    if evaluation.match:
+                    elif evaluation.match:
+                        new_seen.add(listing.id)
+                        if price_eur is not None:
+                            listing_price.record(price_eur, attrs)
                         msg = format_message(listing, evaluation)
                         if app.dry_run:
                             log.info("  -> [dry-run] would send: %s", msg)
@@ -96,6 +105,8 @@ def run_monitor(app: AppConfig) -> None:
                             log.info("  -> Telegram message sent")
                             matches += 1
                         listings_matched.add(1, attrs)
+                    else:
+                        new_seen.add(listing.id)
 
                     time.sleep(0.5)
 

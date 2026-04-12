@@ -1,5 +1,6 @@
 """Kleinanzeigen scraping."""
 import logging
+import re
 import time
 from typing import Optional
 
@@ -21,6 +22,27 @@ BROWSER_HEADERS = {
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
+
+
+def parse_price(price_str: str) -> Optional[float]:
+    """Extract a numeric EUR value from a Kleinanzeigen price string.
+
+    Handles formats like '150 €', 'VB 1.200 €', '3,50 €', 'Zu verschenken'.
+    Returns None for unparseable strings ('Price unknown', free-text, etc.).
+    """
+    s = price_str.strip().replace("€", "").replace("VB", "").strip()
+    if not s or not any(c.isdigit() for c in s):
+        return 0.0 if "verschenken" in price_str.lower() else None
+    s = re.sub(r"[^\d.,]", "", s)
+    # German format: 1.200,50 → 1200.50 / 1.200 → 1200
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    elif re.search(r"\.\d{3}(?:\.|$)", s):
+        s = s.replace(".", "")
+    try:
+        return float(s)
+    except ValueError:
+        return None
 
 
 def _get_with_retry(url: str, retries: int, search_name: str = "") -> Optional[requests.Response]:
