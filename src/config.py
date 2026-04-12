@@ -59,10 +59,23 @@ def load_app_config(args: argparse.Namespace) -> AppConfig:
 
 
 def search_label(search: dict) -> str:
-    """Extract a short label from the Kleinanzeigen search URL (e.g. 'fahrraeder' from '/s-fahrraeder/...')."""
+    """Extract a short label from the Kleinanzeigen search URL, skipping postal codes and filter params."""
+    if search.get("name"):
+        return search["name"]
     url = search.get("url", "")
-    m = re.search(r"/s-([^/]+)", url)
-    return m.group(1) if m else url
+    m = re.search(r"/s-(.*)", url)
+    if not m:
+        return url
+    segments = m.group(1).strip("/").split("/")
+    for seg in segments:
+        if re.fullmatch(r"\d+", seg):
+            continue
+        if seg.startswith("sortierung:"):
+            continue
+        if re.fullmatch(r"[ck]\d.*", seg):
+            continue
+        return seg
+    return segments[0]
 
 
 def resolve(search: dict, config: dict, key: str, default):

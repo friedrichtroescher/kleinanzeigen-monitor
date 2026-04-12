@@ -23,6 +23,26 @@ def test_search_label_empty_url():
     assert search_label({}) == ""
 
 
+def test_search_label_skips_postal_code():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-12459/teppich/k0l9628"}) == "teppich"
+
+
+def test_search_label_skips_postal_code_with_radius():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-12459/bekväm/k0l9628r10"}) == "bekväm"
+
+
+def test_search_label_skips_sortierung():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-sortierung:preis/logitech-spotlight/k0"}) == "logitech-spotlight"
+
+
+def test_search_label_category_with_postal_code():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-garten-pflanzen/12459/c89l9628r5"}) == "garten-pflanzen"
+
+
+def test_search_label_explicit_name_overrides_url():
+    assert search_label({"url": "https://www.kleinanzeigen.de/s-12459/teppich/k0l9628", "name": "mein-teppich"}) == "mein-teppich"
+
+
 # ── parse_price ─────────────────────────────────────────────────────────────
 
 def test_parse_price_simple():
