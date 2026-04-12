@@ -14,6 +14,10 @@ On each run the script iterates over all configured `[[searches]]`. For each sea
 
 **Scheduling**: `setup.sh` registers cron jobs that run at the times configured in `config.toml`.
 
+**Price pre-check**: When `max_price` is set and the listing price can be parsed (e.g. "150 €", "VB 1.200 €"), the script rejects over-budget listings *before* calling the AI — saving API costs. Listings with unparseable prices (e.g. just "VB") are forwarded to the model, which then evaluates the price text itself.
+
+**Price tracking**: The script records a price histogram per search (`monitor.listings.price_euros`) for Grafana dashboards. Only relevant listings are tracked (AI matches + over-budget items). If you set a price filter directly in the Kleinanzeigen URL (e.g. `preis::500`), Kleinanzeigen will only return listings within that range — the histogram then only reflects that filtered range, not the full market. For accurate price range tracking, use `max_price` in `config.toml` instead of URL price filters.
+
 **Cost**: The script deliberately uses cheap models (e.g. Gemini Flash Lite). With ~50 new listings per day, costs are in the cent range.
 
 ## Setup
