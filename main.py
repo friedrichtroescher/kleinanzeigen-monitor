@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""Kleinanzeigen Monitor – universal crawler with AI evaluation and Telegram notifications."""
 
 import logging
 import sys
 import time
 
+from src import telemetry
 from src.config import resolve, search_label, setup_parser, load_app_config, get_searches, list_searches, add_search
 from src.evaluator import evaluate_listing
 from src.fetcher import fetch_listings, parse_price
 from src.models.app_config import AppConfig
 from src.notifier import format_message, send_telegram, send_test_message
 from src.persistence import load_seen, save_seen
-from src.telemetry import (
-    init_telemetry, shutdown_telemetry, tracer,
-    listings_fetched, listings_new, listings_matched, eval_errors, run_duration,
-    search_duration, prefilter_rejections, detail_fetch_failures, scrape_rejections,
-    listing_price,
-)
+from src.telemetry import init_telemetry, shutdown_telemetry, tracer
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +35,7 @@ def run_monitor(app: AppConfig) -> None:
         root_span.set_attribute("search.count", len(searches))
 
         for search in searches:
-            url = search.get("url", "")
+            url = search.get("url")
             if not url:
                 log.warning("Search has no URL – skipped.")
                 continue
@@ -57,46 +52,49 @@ def run_monitor(app: AppConfig) -> None:
                 "search.deep_eval": deep_eval,
             }):
                 # Initialize all counters for this search so time series exist in Prometheus
-                for c in (listings_fetched, listings_new, listings_matched, eval_errors,
-                          prefilter_rejections, detail_fetch_failures, scrape_rejections):
+                for c in (telemetry.listings_fetched, telemetry.listings_new, telemetry.listings_matched,
+                          telemetry.eval_errors,
+                          telemetry.prefilter_rejections, telemetry.detail_fetch_failures,
+                          telemetry.scrape_rejections):
                     c.add(0, attrs)
                 search_start = time.monotonic()
                 log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
                 listings = fetch_listings(url, retries=retries, search_name=label)
                 log.info("%d listings found", len(listings))
-                listings_fetched.add(len(listings), attrs)
+                telemetry.listings_fetched.add(len(listings), attrs)
 
                 for listing in listings:
                     if listing.id in seen and not app.dont_skip_seen:
                         continue
 
-                    listings_new.add(1, attrs)
+                    telemetry.listings_new.add(1, attrs)
                     log.info("New: [%s] %s", listing.id, listing.title[:60])
 
-                    price_eur = parse_price(listing.price)
+                    listing_price = parse_price(listing.price)
 
-                    if max_price is not None and price_eur is not None and price_eur > max_price:
+                    if max_price is not None and listing_price is not None and listing_price > max_price:
                         new_seen.add(listing.id)
-                        listing_price.record(price_eur, attrs)
-                        log.info("  -> price %.0f € exceeds limit %d € — skipped", price_eur, max_price)
+                        telemetry.listing_price.record(listing_price, attrs)
+                        log.info("  -> price %.0f € exceeds limit %d € — skipped", listing_price, max_price)
                         time.sleep(0.5)
                         continue
 
                     evaluation = evaluate_listing(
                         app.api_key, model, listing, search, config,
-                        max_price=max_price if price_eur is None else None,
+                        # pass max price (for price evaluation) to LLM if we couldn't parse the listing price in code
+                        max_price=max_price if listing_price is None else None,
                         deep_eval=deep_eval,
                         retries=retries,
                         search_name=label,
                     )
 
                     if evaluation.error:
-                        eval_errors.add(1, attrs)
+                        telemetry.eval_errors.add(1, attrs)
                         log.warning("  -> skipping seen.json update for %s due to evaluation error", listing.id)
                     elif evaluation.match:
                         new_seen.add(listing.id)
-                        if price_eur is not None:
-                            listing_price.record(price_eur, attrs)
+                        if listing_price is not None:
+                            telemetry.listing_price.record(listing_price, attrs)
                         msg = format_message(listing, evaluation)
                         if app.dry_run:
                             log.info("  -> [dry-run] would send: %s", msg)
@@ -104,19 +102,19 @@ def run_monitor(app: AppConfig) -> None:
                         elif send_telegram(app.telegram_token, app.telegram_chat, msg):
                             log.info("  -> Telegram message sent")
                             matches += 1
-                        listings_matched.add(1, attrs)
+                        telemetry.listings_matched.add(1, attrs)
                     else:
                         new_seen.add(listing.id)
 
                     time.sleep(0.5)
 
-                search_duration.record(time.monotonic() - search_start, attrs)
+                telemetry.search_duration.record(time.monotonic() - search_start, attrs)
                 seen.update(new_seen)
                 save_seen(seen)
                 time.sleep(2)
 
         log.info("Done. %d matches sent. %d IDs known.", matches, len(seen))
-        run_duration.record(time.monotonic() - start)
+        telemetry.run_duration.record(time.monotonic() - start)
 
 
 def main() -> None:

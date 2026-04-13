@@ -96,7 +96,7 @@ def fetch_listings(url: str, retries: int = 2, search_name: str = "") -> list[Li
     return listings
 
 
-def fetch_listing_detail(url: str, retries: int = 2, search_name: str = "") -> ListingDetail:
+def fetch_listing_details(url: str, retries: int = 2, search_name: str = "") -> ListingDetail:
     resp = _get_with_retry(url, retries, search_name=search_name)
     if resp is None:
         return ListingDetail()
