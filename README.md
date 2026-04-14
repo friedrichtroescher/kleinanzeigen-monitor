@@ -10,15 +10,13 @@ Kleinanzeigen URL → parse HTML → AI evaluates → Telegram message
 
 On each run the script iterates over all configured `[[searches]]`. For each search, current listings are scraped from Kleinanzeigen. Every listing not yet in `seen.json` is sent to a language model via [OpenRouter](https://openrouter.ai). The model evaluates based on `profile`, `max_price`, and `prompt` whether the listing is a match. On `match: true` a Telegram message is sent.
 
-**Deduplication**: All seen listing IDs are stored in `seen.json`. Each listing is therefore only evaluated once, regardless of how often the script runs.
+**Deduplication**: All seen listing IDs are stored in `seen.json`.
 
 **Scheduling**: `setup.sh` registers cron jobs that run at the times configured in `config.toml`.
 
 **Price pre-check**: When `max_price` is set and the listing price can be parsed (e.g. "150 €", "VB 1.200 €"), the script rejects over-budget listings *before* calling the AI — saving API costs. Listings with unparseable prices (e.g. just "VB") are forwarded to the model, which then evaluates the price text itself.
 
 **Price tracking**: The script records a price histogram per search (`monitor.listings.price_euros`) for Grafana dashboards. Only relevant listings are tracked (AI matches + over-budget items). If you set a price filter directly in the Kleinanzeigen URL (e.g. `preis::500`), Kleinanzeigen will only return listings within that range — the histogram then only reflects that filtered range, not the full market. For accurate price range tracking, use `max_price` in `config.toml` instead of URL price filters.
-
-**Cost**: The script deliberately uses cheap models (e.g. Gemini Flash Lite). With ~50 new listings per day, costs are in the cent range.
 
 ## Setup
 
@@ -71,9 +69,9 @@ Just copy the `url` from your browser after searching on Kleinanzeigen.
 
 ```bash
 ./setup.sh
-uv run main.py --test-telegram   # Send a test message via Telegram
-uv run main.py                   # Single run
-crontab -l                       # Check cron jobs
+./monitor --test-telegram       # Send a test message via Telegram
+./monitor run                   # Single run
+crontab -l                      # Check cron jobs
 ```
 
 ### 6. Add `monitor` to your PATH (if you want)
@@ -88,8 +86,5 @@ source ~/.zshrc
 Then run from anywhere:
 
 ```bash
-monitor                          # Normal run
-monitor --dry-run                # Test without sending notifications
-monitor search list              # List configured searches
-monitor search add "https://www.kleinanzeigen.de/s-foo/k0" --prompt "..."
+monitor run
 ```
