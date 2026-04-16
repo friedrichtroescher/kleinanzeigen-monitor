@@ -24,6 +24,7 @@ def run_monitor(app: AppConfig) -> None:
         seen = load_seen()
         new_seen = set()
         matches = 0
+        monitored_listings = 0
 
         retries = config.get("network", {}).get("retries", 2)
         searches = get_searches(config)
@@ -61,6 +62,7 @@ def run_monitor(app: AppConfig) -> None:
                 log.info("Crawling: %s (max_price=%s, deep_eval=%s)", url, max_price, deep_eval)
                 listings = fetch_listings(url, retries=retries, search_name=label)
                 log.info("%d listings found", len(listings))
+                monitored_listings += len(listings)
                 telemetry.listings_fetched.add(len(listings), attrs)
 
                 for listing in listings:
@@ -113,7 +115,7 @@ def run_monitor(app: AppConfig) -> None:
                 save_seen(seen)
                 time.sleep(2)
 
-        log.info("Done. %d matches sent. %d IDs known.", matches, len(seen))
+        log.info("Done. %d matches sent. %d listings scanned.", matches, monitored_listings)
         telemetry.run_duration.record(time.monotonic() - start)
 
 

@@ -1,7 +1,9 @@
+import logging
+import os
 import tomllib
 from unittest.mock import patch
 
-from src.config import get_searches, list_searches, add_search, search_label
+from src.config import get_searches, list_searches, add_search, search_label, setup_logging
 from src.fetcher import parse_price
 
 
@@ -164,3 +166,43 @@ def test_list_searches_with_entries(capsys):
     assert "max_price = 200" in out
     assert "deep_eval = true" in out
     assert "Blue only" in out
+
+
+# ── setup_logging: LOG_TIMESTAMP ───────────────────────────────────────────
+
+def _stdout_formatter() -> logging.Formatter:
+    """Return the formatter attached to the root logger's stdout StreamHandler."""
+    for h in logging.getLogger().handlers:
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
+            return h.formatter
+    raise AssertionError("No StreamHandler found on root logger")
+
+
+def test_log_timestamp_true_overrides_non_tty():
+    with patch("src.config.sys.stdout") as mock_stdout, patch.dict("os.environ", {"LOG_TIMESTAMP": "true"}):
+        mock_stdout.isatty.return_value = False
+        setup_logging()
+    assert "asctime" in _stdout_formatter()._fmt
+
+
+def test_log_timestamp_false_overrides_tty():
+    with patch("src.config.sys.stdout") as mock_stdout, patch.dict("os.environ", {"LOG_TIMESTAMP": "false"}):
+        mock_stdout.isatty.return_value = True
+        setup_logging()
+    assert "asctime" not in _stdout_formatter()._fmt
+
+
+def test_log_timestamp_unset_uses_isatty_true():
+    with patch("src.config.sys.stdout") as mock_stdout, patch.dict("os.environ", {}, clear=False):
+        os.environ.pop("LOG_TIMESTAMP", None)
+        mock_stdout.isatty.return_value = True
+        setup_logging()
+    assert "asctime" in _stdout_formatter()._fmt
+
+
+def test_log_timestamp_unset_uses_isatty_false():
+    with patch("src.config.sys.stdout") as mock_stdout, patch.dict("os.environ", {}, clear=False):
+        os.environ.pop("LOG_TIMESTAMP", None)
+        mock_stdout.isatty.return_value = False
+        setup_logging()
+    assert "asctime" not in _stdout_formatter()._fmt

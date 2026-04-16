@@ -92,20 +92,31 @@ def setup_logging(config: dict | None = None) -> None:
         print(f"[warning] Invalid logging.level {raw!r} — falling back to INFO", file=sys.stderr)
         level = logging.INFO
 
-    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    fmt_with_ts = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    fmt_no_ts = logging.Formatter("[%(levelname)s] %(message)s")
 
     root = logging.getLogger()
     root.setLevel(level)
     root.handlers.clear()
 
+    log_ts_env = os.environ.get("LOG_TIMESTAMP", "").lower()
+    match log_ts_env:
+        case "true":
+            use_timestamp = True
+        case "false":
+            use_timestamp = False
+        case _:
+            use_timestamp = sys.stdout.isatty()
+
+
     sh = logging.StreamHandler(sys.stdout)
-    sh.setFormatter(fmt)
+    sh.setFormatter(fmt_with_ts if use_timestamp else fmt_no_ts)
     root.addHandler(sh)
 
     log_file = os.environ.get("LOG_FILE")
     if log_file:
         fh = logging.FileHandler(log_file, encoding="utf-8")
-        fh.setFormatter(fmt)
+        fh.setFormatter(fmt_with_ts)
         root.addHandler(fh)
 
 
