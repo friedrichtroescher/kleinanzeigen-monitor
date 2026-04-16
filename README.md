@@ -74,7 +74,36 @@ Just copy the `url` from your browser after searching on Kleinanzeigen.
 crontab -l                      # Check cron jobs
 ```
 
-### 6. Add `monitor` to your PATH (if you want)
+### 6. OpenTelemetry (optional)
+
+The monitor can export traces, metrics, and logs via OTLP/HTTP. To enable, set the endpoint in `.env`:
+
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-2.grafana.net/otlp
+OTEL_SERVICE_NAME=kleinanzeigen-monitor        # optional, defaults to kleinanzeigen-monitor
+DEPLOYMENT_ENVIRONMENT=production               # optional, defaults to production
+```
+
+If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry is a no-op — no extra dependencies are loaded.
+
+**Exported metrics:**
+
+| Metric | Type | Description |
+|---|---|---|
+| `monitor.listings.fetched` | Counter | Total listings fetched |
+| `monitor.listings.new` | Counter | New listings evaluated |
+| `monitor.listings.matched` | Counter | Matched listings sent |
+| `monitor.listings.price_euros` | Histogram | Listing prices in EUR per search |
+| `monitor.evaluations.errors` | Counter | Evaluation errors |
+| `monitor.evaluations.prefilter_rejections` | Counter | Listings rejected by the deep_eval prefilter |
+| `monitor.listings.detail_fetch_failures` | Counter | Detail page fetch failures during deep_eval |
+| `monitor.scrape.rejections` | Counter | Scraping rejected by Kleinanzeigen (403/429) |
+| `monitor.run.duration_seconds` | Histogram | Total run duration |
+| `monitor.search.duration_seconds` | Histogram | Duration of a single search |
+
+Traces auto-instrument all `requests` HTTP calls. Logs are forwarded from Python's `logging` module.
+
+### 7. Add `monitor` to your PATH (if you want)
 
 Add the project directory to your PATH to use `monitor` as a global command:
 
