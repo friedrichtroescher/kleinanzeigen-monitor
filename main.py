@@ -117,6 +117,7 @@ def run_monitor(app: AppConfig) -> None:
 
         log.info("Done. %d matches sent. %d listings scanned.", matches, monitored_listings)
         telemetry.run_duration.record(time.monotonic() - start)
+        telemetry.run_last_success.set(time.time())
 
 
 def main() -> None:

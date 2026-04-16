@@ -29,6 +29,11 @@ listing_price = meter.create_histogram(
     description="Listing prices in EUR per search",
     unit="EUR",
 )
+run_last_success = meter.create_gauge(
+    "monitor.run.last_success_time",
+    description="Unix epoch of last successful monitor run",
+    unit="s",
+)
 
 
 def init_telemetry() -> None:
