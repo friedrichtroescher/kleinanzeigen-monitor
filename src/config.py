@@ -100,14 +100,7 @@ def setup_logging(config: dict | None = None) -> None:
     root.handlers.clear()
 
     log_ts_env = os.environ.get("LOG_TIMESTAMP", "").lower()
-    match log_ts_env:
-        case "true":
-            use_timestamp = True
-        case "false":
-            use_timestamp = False
-        case _:
-            use_timestamp = sys.stdout.isatty()
-
+    use_timestamp = {"true": True, "false": False}.get(log_ts_env, sys.stdout.isatty())
 
     sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(fmt_with_ts if use_timestamp else fmt_no_ts)
