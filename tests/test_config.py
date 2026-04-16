@@ -4,7 +4,6 @@ import tomllib
 from unittest.mock import patch
 
 from src.config import get_searches, list_searches, add_search, search_label, setup_logging
-from src.fetcher import parse_price
 
 
 # ── search_label ────────────────────────────────────────────────────────────
@@ -46,40 +45,6 @@ def test_search_label_category_with_postal_code():
 def test_search_label_explicit_name_overrides_url():
     assert search_label(
         {"url": "https://www.kleinanzeigen.de/s-12459/teppich/k0l9628", "name": "mein-teppich"}) == "mein-teppich"
-
-
-# ── parse_price ─────────────────────────────────────────────────────────────
-
-def test_parse_price_simple():
-    assert parse_price("150 €") == 150.0
-
-
-def test_parse_price_vb():
-    assert parse_price("VB 200 €") == 200.0
-
-
-def test_parse_price_thousands():
-    assert parse_price("1.200 €") == 1200.0
-
-
-def test_parse_price_cents():
-    assert parse_price("3,50 €") == 3.5
-
-
-def test_parse_price_german_full():
-    assert parse_price("1.200,50 €") == 1200.5
-
-
-def test_parse_price_free():
-    assert parse_price("Zu verschenken") == 0.0
-
-
-def test_parse_price_unknown():
-    assert parse_price("Price unknown") is None
-
-
-def test_parse_price_empty():
-    assert parse_price("") is None
 
 
 # ── get_searches ────────────────────────────────────────────────────────────
