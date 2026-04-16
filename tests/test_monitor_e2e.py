@@ -1,9 +1,9 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from main import run_monitor
 from src.models.app_config import AppConfig
 from src.models.listing import Listing
-from main import run_monitor
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -30,11 +30,13 @@ FAKE_LISTING = Listing(
 )
 
 OPENROUTER_MATCH_RESPONSE = {
-    "choices": [{"message": {"content": json.dumps({"match": True, "item": "Fahrrad 26\"", "reason": "Good condition, fair price."})}}]
+    "choices": [{"message": {
+        "content": json.dumps({"match": True, "item": "Fahrrad 26\"", "reason": "Good condition, fair price."})}}]
 }
 
 OPENROUTER_NO_MATCH_RESPONSE = {
-    "choices": [{"message": {"content": json.dumps({"match": False, "item": "Fahrrad 26\"", "reason": "Price too high."})}}]
+    "choices": [
+        {"message": {"content": json.dumps({"match": False, "item": "Fahrrad 26\"", "reason": "Price too high."})}}]
 }
 
 

@@ -14,7 +14,8 @@ def test_search_label_extracts_term():
 
 
 def test_search_label_with_filters():
-    assert search_label({"url": "https://www.kleinanzeigen.de/s-anderes-beispiel/anzeige:angebote/preis:100:500/c217"}) == "anderes-beispiel"
+    assert search_label({
+        "url": "https://www.kleinanzeigen.de/s-anderes-beispiel/anzeige:angebote/preis:100:500/c217"}) == "anderes-beispiel"
 
 
 def test_search_label_fallback_to_url():
@@ -34,7 +35,8 @@ def test_search_label_skips_postal_code_with_radius():
 
 
 def test_search_label_skips_sortierung():
-    assert search_label({"url": "https://www.kleinanzeigen.de/s-sortierung:preis/logitech-spotlight/k0"}) == "logitech-spotlight"
+    assert search_label(
+        {"url": "https://www.kleinanzeigen.de/s-sortierung:preis/logitech-spotlight/k0"}) == "logitech-spotlight"
 
 
 def test_search_label_category_with_postal_code():
@@ -42,7 +44,8 @@ def test_search_label_category_with_postal_code():
 
 
 def test_search_label_explicit_name_overrides_url():
-    assert search_label({"url": "https://www.kleinanzeigen.de/s-12459/teppich/k0l9628", "name": "mein-teppich"}) == "mein-teppich"
+    assert search_label(
+        {"url": "https://www.kleinanzeigen.de/s-12459/teppich/k0l9628", "name": "mein-teppich"}) == "mein-teppich"
 
 
 # ── parse_price ─────────────────────────────────────────────────────────────

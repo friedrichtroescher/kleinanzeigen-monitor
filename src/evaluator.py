@@ -6,8 +6,8 @@ from typing import Optional
 import requests
 
 from .fetcher import fetch_listing_details
-from .models.listing import Listing
 from .models.evaluationResult import EvaluationResult
+from .models.listing import Listing
 from .models.listingDetail import ListingDetail
 from .telemetry import tracer, prefilter_rejections, detail_fetch_failures
 
@@ -43,6 +43,7 @@ COMMON_PREFILTER_PROMPT = (
     'Respond ONLY with valid JSON (no Markdown): {"match": true/false}\n'
     "Be permissive — only reject listings that clearly cannot match."
 )
+
 
 def evaluate_listing(
         api_key: str,
@@ -149,7 +150,8 @@ def _call_model(
             result = json.loads(raw)
             if not required_fields.issubset(result):
                 missing = required_fields - result.keys()
-                log.warning("Evaluation for %s: missing fields %s (attempt %d/%d)", listing.id, missing, attempt + 1, retries)
+                log.warning("Evaluation for %s: missing fields %s (attempt %d/%d)", listing.id, missing, attempt + 1,
+                            retries)
                 continue
             return EvaluationResult(
                 match=result["match"],

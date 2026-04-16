@@ -27,7 +27,7 @@ def load_config() -> dict:
 
 
 def load_app_config(args: argparse.Namespace) -> AppConfig:
-    setup_logging() # basic logging before we have users config
+    setup_logging()  # basic logging before we have users config
     load_dotenv(ENV_FILE)
     try:
         config = load_config()
@@ -138,9 +138,12 @@ def setup_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     run_parser = subparsers.add_parser("run", help="Run the monitor (fetch, evaluate, notify)")
-    run_parser.add_argument("--test-telegram", action="store_true", help="Send a test Telegram message to verify bot credentials, then exit.")
-    run_parser.add_argument("--dry-run", action="store_true", help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
-    run_parser.add_argument("--dont-skip-seen", action="store_true", help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
+    run_parser.add_argument("--test-telegram", action="store_true",
+                            help="Send a test Telegram message to verify bot credentials, then exit.")
+    run_parser.add_argument("--dry-run", action="store_true",
+                            help="Fetch and evaluate listings, but do not send Telegram messages. Logs what would have been sent instead.")
+    run_parser.add_argument("--dont-skip-seen", action="store_true",
+                            help="Evaluate all fetched listings, even ones already recorded in seen.json. Useful for debugging evaluation logic.")
 
     search_parser = subparsers.add_parser("search", help="Manage search URLs in config.toml")
     search_sub = search_parser.add_subparsers(dest="search_action")
@@ -149,7 +152,8 @@ def setup_parser() -> argparse.ArgumentParser:
     add_parser.add_argument("url", help="Kleinanzeigen search URL")
     add_parser.add_argument("--prompt", dest="addition_prompt", help="Evaluation prompt for this search")
     add_parser.add_argument("--max-price", type=int, help="Maximum price filter")
-    add_parser.add_argument("--deep-eval", action="store_true", default=None, help="Enable deep evaluation (fetch detail pages)")
+    add_parser.add_argument("--deep-eval", action="store_true", default=None,
+                            help="Enable deep evaluation (fetch detail pages)")
 
     return parser
 
@@ -180,7 +184,8 @@ def list_searches() -> None:
         print("\n".join(parts))
 
 
-def add_search(url: str, addition_prompt: str | None = None, max_price: int | None = None, deep_eval: bool | None = None) -> None:
+def add_search(url: str, addition_prompt: str | None = None, max_price: int | None = None,
+               deep_eval: bool | None = None) -> None:
     block = '\n[[searches]]\n'
     block += f'url = "{url}"\n'
     if max_price is not None:

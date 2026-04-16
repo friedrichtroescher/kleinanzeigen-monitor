@@ -4,8 +4,8 @@ import sys
 
 import requests
 
-from .models.listing import Listing
 from .models.evaluationResult import EvaluationResult
+from .models.listing import Listing
 
 log = logging.getLogger(__name__)
 
