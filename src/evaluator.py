@@ -1,6 +1,7 @@
 """AI-based listing evaluation via OpenRouter."""
 import json
 import logging
+import re
 from typing import Optional
 
 import requests
@@ -99,6 +100,36 @@ def evaluate_listing(
         return evaluation
 
 
+def _try_parse_json(raw: str) -> Optional[dict]:
+    """Try to parse JSON from an LLM response, with fallbacks for common malformation."""
+    # 1. Try direct parse
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Extract outermost { ... } and retry (handles markdown, preamble, trailing text)
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group())
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Regex fallback for known fields (handles unescaped quotes inside values)
+    match_m = re.search(r'"match"\s*:\s*(true|false)', raw, re.IGNORECASE)
+    if not match_m:
+        return None
+    result: dict = {"match": match_m.group(1).lower() == "true"}
+    item_m = re.search(r'"item"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+    if item_m:
+        result["item"] = item_m.group(1)
+    reason_m = re.search(r'"reason"\s*:\s*"(.+)"\s*\}', raw, re.DOTALL)
+    if reason_m:
+        result["reason"] = reason_m.group(1)
+    return result
+
+
 def _call_model(
         api_key: str,
         model: str,
@@ -139,19 +170,17 @@ def _call_model(
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
             if content is None:
-                log.warning("Evaluation for %s: empty response (attempt %d/%d)", listing.id, attempt + 1, retries)
+                log.warning("Evaluation for %s: empty response (attempt %d/%d)", listing.id, attempt + 1, 1 + retries)
                 continue
-            raw = content.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-            result = json.loads(raw)
+            result = _try_parse_json(content.strip())
+            if result is None:
+                log.warning("Evaluation for %s: unparseable response (attempt %d/%d)", listing.id, attempt + 1,
+                            1 + retries)
+                continue
             if not required_fields.issubset(result):
                 missing = required_fields - result.keys()
                 log.warning("Evaluation for %s: missing fields %s (attempt %d/%d)", listing.id, missing, attempt + 1,
-                            retries)
+                            1 + retries)
                 continue
             return EvaluationResult(
                 match=result["match"],
@@ -159,7 +188,7 @@ def _call_model(
                 reason=result.get("reason", ""),
             )
         except Exception as e:
-            log.warning("Evaluation error for %s (attempt %d/%d): %s", listing.id, attempt + 1, retries, e)
+            log.warning("Evaluation error for %s (attempt %d/%d): %s", listing.id, attempt + 1, 1 + retries, e)
     return EvaluationResult(match=False, item="", reason="Evaluation error", error=True)
 
 
