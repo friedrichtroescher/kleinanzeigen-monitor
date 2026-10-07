@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kleinanzeigen-monitor
+  namespace: kleinanzeigen-monitor
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          containers:
+          - name: monitor
+            image: ghcr.io/friedrichtroescher/kleinanzeigen-monitor:latest
+            imagePullPolicy: Always
+            envFrom:
+            - secretRef:
+                name: kleinanzeigen-monitor-secrets
+            env:
+            - name: SEEN_FILE
+              value: /data/seen.json
+            - name: CONFIG_FILE
+              value: /config/config.toml
+            - name: OTEL_SERVICE_NAME
+              value: kleinanzeigen-monitor
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production"
+            volumeMounts:
+            - name: seen-data
+              mountPath: /data
+            - name: config
+              mountPath: /config
+          volumes:
+          - name: seen-data
+            persistentVolumeClaim:
+              claimName: kleinanzeigen-monitor-seen
+          - name: config
+            configMap:
+              name: kleinanzeigen-monitor-config
+          restartPolicy: OnFailure

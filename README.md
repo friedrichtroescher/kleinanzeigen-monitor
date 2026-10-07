@@ -14,6 +14,8 @@ On each run the script iterates over all configured `[[searches]]`. For each sea
 
 **Scheduling**: `setup.sh` registers cron jobs that run at the times configured in `config.toml`.
 
+**Kubernetes / GitOps**: [deploy/README.md](deploy/README.md) contains the Argo CD application, Kubernetes CronJob with persistent state, and optional Grafana dashboard and heartbeat alert. These templates reproduce the monitor deployment without requiring the private infrastructure repository.
+
 **Price pre-check**: When `max_price` is set and the listing price can be parsed (e.g. "150 €", "VB 1.200 €"), the script rejects over-budget listings *before* calling the AI — saving API costs. Listings with unparseable prices (e.g. just "VB") are forwarded to the model, which then evaluates the price text itself.
 
 **Price tracking**: The script records a price histogram per search (`monitor.listings.price_euros`) for Grafana dashboards. Only relevant listings are tracked (AI matches + over-budget items). If you set a price filter directly in the Kleinanzeigen URL (e.g. `preis::500`), Kleinanzeigen will only return listings within that range — the histogram then only reflects that filtered range, not the full market. For accurate price range tracking, use `max_price` in `config.toml` instead of URL price filters.

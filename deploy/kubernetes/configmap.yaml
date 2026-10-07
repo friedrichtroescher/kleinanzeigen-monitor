@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kleinanzeigen-monitor-config
+  namespace: kleinanzeigen-monitor
+data:
+  config.toml: |
+    [model]
+    id = "anthropic/claude-haiku-4.5"
+
+    [network]
+    retries = 2
+
+    [logging]
+    level = "INFO"
+
+    [assistant]
+    common_prompt = "I'm looking for used items in good condition at fair prices."
+    deep_eval = true
+
+    [[searches]]
+    name = "road-bike"
+    url = "https://www.kleinanzeigen.de/s-rennrad/k0"
+    max_price = 800
+    addition_prompt = "Frame 54-56cm, at least Shimano 105, no rust"

@@ -7,3 +7,13 @@ monitor.log
 .env
 __pycache__/
 cloudify-this-plan.md
+
+# Local deployment credentials and Terraform state
+/deploy/secret.yaml
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+crash.log

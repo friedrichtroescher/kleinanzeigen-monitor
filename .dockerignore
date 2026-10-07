@@ -6,3 +6,5 @@ monitor.log
 __pycache__/
 tests/
 *.md
+deploy/
+scripts/
